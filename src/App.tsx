@@ -18,7 +18,7 @@ import {
   Search, Download, Trash2, LayoutDashboard, ListTodo, Filter, ChevronRight, ChevronLeft, ArrowUpDown, Settings, Save,
   Pencil, RotateCcw, AlertTriangle, Info, ShieldAlert, UserPlus, Users, Key,
   History, Eye, Scale, Terminal, Calendar, ChevronDown, FileSpreadsheet, FileText, X, Palette,
-  BookOpen, Sparkles, MessageSquare, Send, Brain, Wrench
+  BookOpen, Sparkles, MessageSquare, Send, Brain, Wrench, Paperclip, Upload, Copy, Check, FileCode, ImageIcon
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import { format, subDays, differenceInMinutes, parseISO as dateFnsParseISO, startOfDay, endOfDay, addDays } from 'date-fns';
@@ -171,6 +171,125 @@ export default function App() {
     }
   };
 
+  const handleFileReader = (file: File): Promise<void> => {
+    return new Promise((resolve) => {
+      if (file.size > 4 * 1024 * 1024) {
+        alert(`File ${file.name} exceeds the 4MB limit for inline database storage.`);
+        resolve();
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        setTempAttachments(prev => {
+          if (prev.some(f => f.name === file.name)) return prev;
+          return [...prev, {
+            name: file.name,
+            size: file.size,
+            type: file.type || 'application/octet-stream',
+            dataUrl: dataUrl,
+            uploadedAt: new Date().toISOString()
+          }];
+        });
+        resolve();
+      };
+      reader.onerror = () => {
+        resolve();
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const seedMockAttachments = (loadedTasks: SupportTask[]) => {
+    if (localStorage.getItem('sflow_seeded_attachments_v2')) return;
+    if (!loadedTasks || loadedTasks.length === 0) return;
+
+    const sampleLogs = `[2026-05-27 08:12:05] INFO: Initializing database cluster adapter...
+[2026-05-27 08:12:06] DETAIL: Connection pool initialized with 20 active connections.
+[2026-05-27 08:12:08] WARNING: Database server latency is 142ms (threshold is 100ms).
+[2026-05-27 08:12:12] ERROR: FATAL EXCEPTION - deadlock detected during vacuum process.
+[2026-05-27 08:12:12] ERROR: Transaction (Process ID 4122) was deadlocked on lock resources with another process.
+[2026-05-27 08:12:15] INFO: Rolling back to savepoint delta-alpha.
+[2026-05-27 08:12:18] DETAIL: Restored active state from read replica backend.
+[2026-05-27 08:13:00] INFO: SLA Monitoring System registered recovery time: 52 seconds.`;
+
+    const sampleCsv = `Timestamp,Metric,Value,Threshold,Status
+2026-05-27T08:00:00Z,CPU_Utilization_Pct,42.5,80.0,OK
+2026-05-27T08:05:00Z,CPU_Utilization_Pct,51.2,80.0,OK
+2026-05-27T08:10:00Z,CPU_Utilization_Pct,94.8,80.0,WARNING
+2026-05-27T08:15:00Z,CPU_Utilization_Pct,98.2,80.0,CRITICAL
+2026-05-27T08:20:00Z,CPU_Utilization_Pct,35.1,80.0,OK
+2026-05-27T08:25:00Z,Disk_I_O_Ops_Sec,2400.0,3000.0,OK
+2026-05-27T08:30:00Z,Disk_I_O_Ops_Sec,3150.0,3000.0,WARNING`;
+
+    const sampleDoc = `======================================================================
+METROPOLIS ITSM PORTAL - INFRASTRUCTURE AUDIT SIGN-OFF
+======================================================================
+Document Ref: AUDST-201-HR
+Security Tier: Restricted Enterprise
+Associated Project: HR-Portal
+Linked Case ID: INC-1002
+
+Subject: Network Security Token and Gateway Validation Sign-Off
+Date: 2026-05-26 14:15:00 UTC
+
+The engineering review of the recent API gateway integration reports 100% compliance with corporate compliance controls. We have completed:
+1. Double-hop TLS 1.3 encryption handshakes verified globally.
+2. Active incident token invalidation triggered successfully.
+3. Penetration vector validation logs backed up.
+
+Resolution: APPROVED AND SIGNED OFF FOR DEPLOYMENT
+Signatures Registered:
+- John Doe (Principal Tech Lead, SupportFlow)
+- Sarah Miller (Director of Enterprise Support Operations)`;
+
+    const sampleImgPng = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='300' viewBox='0 0 600 300'><rect width='600' height='300' fill='%230b1329'/><circle cx='300' cy='150' r='100' fill='none' stroke='%233b82f6' stroke-width='4'/><circle cx='300' cy='150' r='50' fill='none' stroke='%2310b981' stroke-dasharray='10,10' stroke-width='2'/><path d='M200 150h200M300 50v200' stroke='%231e293b' stroke-width='2'/><text x='300' y='155' fill='%23ffffff' font-family='monospace' font-size='14' text-anchor='middle'>SLA CLOCK ANALYSIS ENGINE ACTIVE</text></svg>";
+
+    // Assign to the first task
+    const t1 = loadedTasks[0]?.ticketId;
+    if (t1) {
+      localStorage.setItem('sflow_attachments_' + t1, JSON.stringify([
+        {
+          name: 'database_deadlock_trace.log',
+          size: sampleLogs.length,
+          type: 'text/plain',
+          dataUrl: 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(sampleLogs))),
+          uploadedAt: new Date(Date.now() - 3600000).toISOString()
+        },
+        {
+          name: 'cpu_usage_audit.csv',
+          size: sampleCsv.length,
+          type: 'text/csv',
+          dataUrl: 'data:text/csv;base64,' + btoa(unescape(encodeURIComponent(sampleCsv))),
+          uploadedAt: new Date(Date.now() - 1800000).toISOString()
+        }
+      ]));
+    }
+
+    // Assign to the second task
+    const t2 = loadedTasks[1]?.ticketId || 'INC-1002';
+    if (t2) {
+      localStorage.setItem('sflow_attachments_' + t2, JSON.stringify([
+        {
+          name: 'infrastructure_audit_signoff.pdf',
+          size: sampleDoc.length,
+          type: 'application/pdf',
+          dataUrl: 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(sampleDoc))),
+          uploadedAt: new Date(Date.now() - 7200000).toISOString()
+        },
+        {
+          name: 'monitoring_schema.png',
+          size: sampleImgPng.length,
+          type: 'image/png',
+          dataUrl: sampleImgPng,
+          uploadedAt: new Date(Date.now() - 10800000).toISOString()
+        }
+      ]));
+    }
+
+    localStorage.setItem('sflow_seeded_attachments_v2', 'true');
+  };
+
   const fetchTasks = async () => {
     try {
       const response = await fetch(API_BASE);
@@ -181,6 +300,11 @@ export default function App() {
           auditLog: t.auditLog ? (typeof t.auditLog === 'string' ? JSON.parse(t.auditLog) : t.auditLog) : []
         }));
         setTasks(parsed);
+        try {
+          seedMockAttachments(parsed);
+        } catch (err) {
+          console.error("Error seeding mock attachments:", err);
+        }
       }
     } catch (error) {
       console.error('Error connecting to backend (tasks):', error);
@@ -406,6 +530,17 @@ export default function App() {
   
   const [metricsDetailModalOpen, setMetricsDetailModalOpen] = useState(false);
   const [metricsDetailProject, setMetricsDetailProject] = useState('All');
+
+  const [attachmentStorageMode, setAttachmentStorageMode] = useState<'local' | 'sandbox'>(() => {
+    return (localStorage.getItem('sflow_attachment_storage_mode') as 'local' | 'sandbox') || 'local';
+  });
+
+  const [attachmentBasePath, setAttachmentBasePath] = useState<string>(() => {
+    return localStorage.getItem('sflow_attachment_base_path') || 'E:\\ITSM_Attachment_Folder\\Attachments';
+  });
+  const [tempAttachments, setTempAttachments] = useState<{name: string, size: number, type: string, dataUrl: string, uploadedAt: string}[]>([]);
+  const [activeSmartViewAttachment, setActiveSmartViewAttachment] = useState<{name: string, size: number, type: string, dataUrl: string, uploadedAt: string, ticketId?: string, projectId?: string} | null>(null);
+  const [copiedAttachmentPath, setCopiedAttachmentPath] = useState<boolean>(false);
 
   // Drilldown modal states
   const [drilldownModalOpen, setDrilldownModalOpen] = useState(false);
@@ -2419,6 +2554,17 @@ Guidelines:
 
           if (response.ok) {
             const savedTask = await response.json();
+            
+            // Persist locally staged attachments for the assigned ticket ID
+            if (tempAttachments.length > 0) {
+              const targetKey = 'sflow_attachments_' + savedTask.ticketId;
+              const existingStr = localStorage.getItem(targetKey);
+              const existingList = existingStr ? JSON.parse(existingStr) : [];
+              const mergedList = [...existingList, ...tempAttachments];
+              localStorage.setItem(targetKey, JSON.stringify(mergedList));
+              setTempAttachments([]); // Reset staging area
+            }
+
             const parsedSavedTask = {
               ...savedTask,
               auditLog: savedTask.auditLog ? (typeof savedTask.auditLog === 'string' ? JSON.parse(savedTask.auditLog) : savedTask.auditLog) : []
@@ -3879,6 +4025,88 @@ Guidelines:
                 onChange={e => setFormData({ ...formData, remarks: e.target.value })}
                 disabled={!!editingTask}
               />
+            </div>
+
+            {/* Case Creation Attachments Dropzone / Interface */}
+            <div className="space-y-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1.5">
+                  <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                  Staged Files ({tempAttachments.length})
+                </label>
+                <span className="text-[8px] uppercase font-extrabold text-blue-500 bg-blue-500/10 px-1 rounded">Staged</span>
+              </div>
+              
+              <div 
+                className="border border-dashed border-slate-700/60 hover:border-blue-500/50 bg-slate-950/40 p-3 rounded-lg flex flex-col items-center justify-center gap-1.5 transition-all relative overflow-hidden group min-h-[60px] cursor-pointer"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const files = Array.from(e.dataTransfer.files) as File[];
+                  for (const file of files) {
+                    await handleFileReader(file);
+                  }
+                }}
+              >
+                <Upload className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-400 group-hover:scale-110 transition-all" />
+                <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-slate-300">Drag & Drop or Browse</span>
+                <input 
+                  type="file" 
+                  multiple
+                  onChange={async (e) => {
+                    if (e.target.files) {
+                      const files = Array.from(e.target.files) as File[];
+                      for (const file of files) {
+                        await handleFileReader(file);
+                      }
+                      e.target.value = ''; // Reset input selection
+                    }
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+              </div>
+
+              {tempAttachments.length > 0 && (
+                <div className="space-y-1.5 max-h-[140px] overflow-y-auto custom-scrollbar pr-1">
+                  {tempAttachments.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between bg-slate-950 p-2 rounded border border-slate-800 hover:border-slate-700 transition-colors">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <FileCode className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] text-slate-200 font-bold truncate" title={f.name}>{f.name}</p>
+                          <p className="text-[8px] text-slate-500 font-mono">{(f.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setTempAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                        className="p-1 text-slate-500 hover:text-red-400 rounded hover:bg-red-500/10 transition-colors"
+                        title="Remove Document"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Show directory path notification */}
+              <div className="p-2 bg-slate-950/60 border border-slate-900 rounded-lg space-y-1 text-left select-none text-[8.5px] text-slate-450 animate-fade-in">
+                <span className="font-extrabold uppercase text-slate-400 text-[8px] block tracking-wide">
+                  {attachmentStorageMode === 'local' ? 'Target Directory Hierarchy' : 'Browser Sandbox Partition Indicator'}
+                </span>
+                <p className="font-mono bg-slate-950 p-1.5 rounded font-semibold text-emerald-400 select-all leading-normal text-[8.5px] break-all">
+                  {attachmentStorageMode === 'local' ? (
+                    `${attachmentBasePath}\\${formData.projectId || 'PROJECT'}\\${formData.ticketId || 'INC-TEMP'}\\`
+                  ) : (
+                    `SECURE_SANDBOX://indexeddb/sflow_attachments_${formData.ticketId || 'INC-TEMP'}/`
+                  )}
+                </p>
+              </div>
             </div>
 
             <div className="flex gap-2">
@@ -6229,6 +6457,136 @@ Guidelines:
                   </div>
                 </div>
 
+                {/* Segment 4: Local Machine Directory Configuration */}
+                <div className="chart-container p-8 border-l-4 border-l-rose-500/50 mb-8">
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-rose-500/10 rounded-xl text-rose-500">
+                          <Paperclip className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="text-xl font-black text-white uppercase tracking-tight font-sans">Corporate Attachment Storage Settings</h4>
+                          <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-1">Configure virtual client-mapped machine partitions for files archiving</p>
+                        </div>
+                      </div>
+                      <span className="text-[9px] uppercase font-mono px-2.5 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold rounded-lg tracking-wider">
+                        Filesystem Gateway
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-6 rounded-2xl border border-slate-850 space-y-6 font-sans text-left">
+                      {/* Storage Mode Selection */}
+                      <div className="space-y-2">
+                        <label className="text-xs uppercase font-extrabold text-slate-300 tracking-wider">Attachment Archive Storage Mode</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAttachmentStorageMode('local');
+                              localStorage.setItem('sflow_attachment_storage_mode', 'local');
+                            }}
+                            className={`p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all duration-200 cursor-pointer ${
+                              attachmentStorageMode === 'local'
+                                ? 'bg-rose-500/10 border-rose-500/50 text-white shadow-lg shadow-rose-950/20'
+                                : 'bg-slate-950 hover:bg-slate-900/60 border-slate-855 text-slate-450 hover:text-slate-350'
+                            }`}
+                          >
+                            <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2">
+                              <span className={`w-2.5 h-2.5 rounded-full ${attachmentStorageMode === 'local' ? 'bg-rose-500 animate-pulse' : 'bg-slate-600'}`} />
+                              Local Drive Mode
+                            </span>
+                            <span className="text-[10px] leading-relaxed font-semibold mt-0.5">
+                              Configure direct corporate folder pathways mapped via active client network nodes. Best for strict on-prem directory indexing.
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAttachmentStorageMode('sandbox');
+                              localStorage.setItem('sflow_attachment_storage_mode', 'sandbox');
+                            }}
+                            className={`p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all duration-200 cursor-pointer ${
+                              attachmentStorageMode === 'sandbox'
+                                ? 'bg-blue-500/10 border-blue-500/50 text-white shadow-lg shadow-blue-950/20'
+                                : 'bg-slate-950 hover:bg-slate-900/60 border-slate-855 text-slate-450 hover:text-slate-350'
+                            }`}
+                          >
+                            <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2">
+                              <span className={`w-2.5 h-2.5 rounded-full ${attachmentStorageMode === 'sandbox' ? 'bg-blue-500 animate-pulse' : 'bg-slate-600'}`} />
+                              Browser Sandbox Mode
+                            </span>
+                            <span className="text-[10px] leading-relaxed font-semibold mt-0.5">
+                              Store files virtually within client sandbox structures. Completely isolated, zero OS-volume pathway configuration is required.
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className={`space-y-2 pt-4 border-t border-slate-900/80 transition-opacity duration-200 ${attachmentStorageMode === 'sandbox' ? 'opacity-40' : 'opacity-100'}`}>
+                        <label className="text-xs uppercase font-extrabold text-slate-300 tracking-wider flex items-center gap-1.5">
+                          Machine Base Pathway Partition (Path)
+                          {attachmentStorageMode === 'sandbox' && (
+                            <span className="text-[8px] bg-blue-500/20 text-blue-400 font-mono px-1.5 py-0.5 rounded uppercase font-black tracking-wider">Bypassed</span>
+                          )}
+                        </label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            value={attachmentBasePath}
+                            onChange={(e) => setAttachmentBasePath(e.target.value)}
+                            disabled={attachmentStorageMode === 'sandbox'}
+                            placeholder={attachmentStorageMode === 'sandbox' ? 'N/A: Isolated sandbox mode active' : 'e.g. E:\\ITSM_Attachment_Folder\\Attachments'}
+                            className="input-field py-3 font-mono text-emerald-400 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                          <button 
+                            type="button"
+                            disabled={attachmentStorageMode === 'sandbox'}
+                            onClick={() => {
+                              localStorage.setItem('sflow_attachment_base_path', attachmentBasePath);
+                              alert('Attachment storage Base Pathway successfully saved & configured.');
+                            }}
+                            className="status-chip bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 text-emerald-400 px-6 shrink-0 text-xs font-black uppercase tracking-widest rounded-xl transition-all font-sans cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-900 disabled:border-slate-850 disabled:text-slate-650"
+                          >
+                            Save Pathway
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-normal font-medium mt-1">
+                          {attachmentStorageMode === 'sandbox' ? (
+                            'The file pathway system behaves as decentralized local indexed objects inside browser-isolated storage schemas. Standard path serialization is bypassed.'
+                          ) : (
+                            <>
+                              This base pathway represents the corporate directory node. Staged file indicators will output and export on-screen in the folder hierarchy structure: 
+                              <span className="font-mono text-emerald-400 font-semibold bg-slate-950 px-1 py-0.5 rounded ml-1 select-all break-all">[Base_Path] \ [Project_Name] \ [Case_ID] \ [File_Name]</span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-900 pt-4 font-sans">
+                        <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black tracking-wider block">Archive Rule Set</span>
+                          <p className="text-white text-xs font-bold leading-normal mt-0.5">
+                            {attachmentStorageMode === 'local' ? 'Project Specific Folder Mapping' : 'Secure Indexed Sandbox Pool'}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-medium font-sans">
+                            {attachmentStorageMode === 'local' 
+                              ? 'Directories and case hierarchy trees automatically materialize upon saving configuration strategies or staging new files.'
+                              : 'Attachments bypass native OS mapping layers and reside securely inside local browser partition stores.'
+                            }
+                          </p>
+                        </div>
+                        <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 space-y-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black tracking-wider block">Sandbox Security Limits</span>
+                          <p className="text-white text-xs font-bold leading-normal mt-0.5">Max 4.0 MB File Size Cap</p>
+                          <p className="text-[10px] text-slate-500 font-medium font-sans">Files larger than 4MB are automatically checked and blocked defensively to optimize responsive client storage memory allocation.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Segment 3: Category & Subcategory Governance */}
                 <div className="chart-container p-8 border-l-4 border-l-indigo-500/50">
                   <div className="space-y-8">
@@ -8148,6 +8506,315 @@ Guidelines:
                        </div>
                     </div>
 
+                    {/* Active Case Attachment Vault & Native Directory Layout */}
+                    <div className="space-y-4 pt-6 border-t border-slate-800/60 font-sans">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Paperclip className="w-5 h-5 text-rose-500" />
+                          <div>
+                            <h4 className="text-xs font-black text-white uppercase tracking-wider font-sans">Active Case Attachment Vault</h4>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Corporate files associated with this specific incident sequence</p>
+                          </div>
+                        </div>
+                        <span className={`text-[9.5px] font-mono px-2.5 py-0.5 rounded border uppercase font-bold tracking-wider ${
+                          attachmentStorageMode === 'local' 
+                            ? 'text-rose-400 bg-rose-500/10 border-rose-500/15' 
+                            : 'text-blue-400 bg-blue-500/10 border-blue-500/15'
+                        }`}>
+                          {attachmentStorageMode === 'local' ? 'Drive-Mapped Storage Mode' : 'Browser Sandbox Secure Mode'}
+                        </span>
+                      </div>
+
+                      {/* Path Configuration Info */}
+                      <div className="bg-slate-950 p-4 rounded-2xl border border-slate-850 space-y-3">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 font-sans">
+                          <div className="space-y-0.5">
+                            <span className="text-[8.5px] uppercase font-bold text-slate-400 block tracking-wider">
+                              {attachmentStorageMode === 'local' ? 'Estimated Machine File Pathway' : 'Decentralized Browser Sandbox Key Reference'}
+                            </span>
+                            <span className="font-mono text-[11px] text-emerald-400 break-all select-all font-semibold">
+                              {attachmentStorageMode === 'local' ? (
+                                `${attachmentBasePath}\\${projectConfigs.find(c => c.projectId === auditTask.projectId)?.projectId || auditTask.projectId}\\${auditTask.ticketId}\\`
+                              ) : (
+                                `SECURE_SANDBOX://indexeddb/sflow_attachments_${auditTask.ticketId}/`
+                              )}
+                            </span>
+                          </div>
+                          {attachmentStorageMode === 'local' && (
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${attachmentBasePath}\\${projectConfigs.find(c => c.projectId === auditTask.projectId)?.projectId || auditTask.projectId}\\${auditTask.ticketId}\\`);
+                                setCopiedAttachmentPath(true);
+                                setTimeout(() => setCopiedAttachmentPath(false), 2000);
+                              }}
+                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-700 rounded-xl text-[9px] uppercase font-black tracking-widest flex items-center gap-1.5 shrink-0 transition-all self-start md:self-center"
+                            >
+                              {copiedAttachmentPath ? <Check className="w-3 h-3 text-emerald-400 animate-bounce" /> : <Copy className="w-3 h-3" />}
+                              {copiedAttachmentPath ? 'Copied Pathway!' : 'Copy Pathway'}
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-normal font-medium">
+                          {attachmentStorageMode === 'local' 
+                            ? 'Any additions committed below reside in the browser database mapped virtually to this native filesystem partition.'
+                            : 'All files are securely sandboxed locally using high-performance local buffer serialization to prevent unauthorized external access.'
+                          }
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Direct Attachment Dropzone inside Modal */}
+                        <div className="lg:col-span-1 bg-slate-900/40 p-5 rounded-2xl border border-slate-800 hover:border-blue-500/30 transition-all flex flex-col justify-center min-h-[140px] relative overflow-hidden group">
+                          <div 
+                            className="border-2 border-dashed border-slate-800/80 hover:border-slate-650/60 bg-slate-950/20 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer h-full text-center transition-all"
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                            onDrop={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const files = Array.from(e.dataTransfer.files) as File[];
+                              const targetKey = 'sflow_attachments_' + auditTask.ticketId;
+                              const existingStr = localStorage.getItem(targetKey);
+                              const existingList = existingStr ? JSON.parse(existingStr) : [];
+                              const newStaged: any[] = [];
+                              for (const file of files) {
+                                if (file.size > 4 * 1024 * 1024) {
+                                  alert(`File ${file.name} exceeds 4MB size threshold.`);
+                                  continue;
+                                }
+                                await new Promise<void>((resolve) => {
+                                  const r = new FileReader();
+                                  r.onload = (ev) => {
+                                    newStaged.push({
+                                      name: file.name,
+                                      size: file.size,
+                                      type: file.type || 'application/octet-stream',
+                                      dataUrl: ev.target?.result as string,
+                                      uploadedAt: new Date().toISOString()
+                                    });
+                                    resolve();
+                                  };
+                                  r.readAsDataURL(file);
+                                });
+                              }
+                              if (newStaged.length > 0) {
+                                const merged = [...existingList, ...newStaged];
+                                localStorage.setItem(targetKey, JSON.stringify(merged));
+                                // Log event dynamically to audit logs
+                                const nowIso = new Date().toISOString();
+                                const attachmentUpdateLog = {
+                                  timestamp: nowIso,
+                                  user: currentUser,
+                                  action: 'Attachment Vault Added',
+                                  details: `Committed ${newStaged.length} attachment file(s) directly: ${newStaged.map(f => f.name).join(', ')}`
+                                };
+                                const updatedLogs = [...(auditTask.auditLog || []), attachmentUpdateLog];
+                                // Prepare server update
+                                const serverPayload = {
+                                  ...auditTask,
+                                  auditLog: JSON.stringify(updatedLogs)
+                                };
+                                try {
+                                  await fetch(`${API_BASE}/${auditTask.id}`, {
+                                    method: 'PUT',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify(serverPayload)
+                                  });
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                                setAuditTask({
+                                  ...auditTask,
+                                  auditLog: updatedLogs
+                                });
+                                // Force tasks list update to trigger visual updates
+                                setTasks(prev => prev.map(t => t.id === auditTask.id ? { ...t, auditLog: updatedLogs } : t));
+                              }
+                            }}
+                          >
+                            <Upload className="w-5 h-5 text-rose-500 group-hover:scale-110 transition-transform duration-300" />
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-black uppercase text-slate-300">Drag & Drop Documents</p>
+                              <p className="text-[8px] text-slate-500 uppercase font-bold">Or click to select</p>
+                            </div>
+                            <input 
+                              type="file" 
+                              multiple 
+                              onChange={async (e) => {
+                                if (e.target.files) {
+                                  const files = Array.from(e.target.files) as File[];
+                                  const targetKey = 'sflow_attachments_' + auditTask.ticketId;
+                                  const existingStr = localStorage.getItem(targetKey);
+                                  const existingList = existingStr ? JSON.parse(existingStr) : [];
+                                  const newStaged: any[] = [];
+                                  for (const file of files) {
+                                    if (file.size > 4 * 1024 * 1024) {
+                                      alert(`File ${file.name} exceeds 4MB size threshold.`);
+                                      continue;
+                                    }
+                                    await new Promise<void>((resolve) => {
+                                      const r = new FileReader();
+                                      r.onload = (ev) => {
+                                        newStaged.push({
+                                          name: file.name,
+                                          size: file.size,
+                                          type: file.type || 'application/octet-stream',
+                                          dataUrl: ev.target?.result as string,
+                                          uploadedAt: new Date().toISOString()
+                                        });
+                                        resolve();
+                                      };
+                                      r.readAsDataURL(file);
+                                    });
+                                  }
+                                  if (newStaged.length > 0) {
+                                    const merged = [...existingList, ...newStaged];
+                                    localStorage.setItem(targetKey, JSON.stringify(merged));
+                                    // Log event dynamically to audit logs
+                                    const nowIso = new Date().toISOString();
+                                    const attachmentUpdateLog = {
+                                      timestamp: nowIso,
+                                      user: currentUser,
+                                      action: 'Attachment Vault Added',
+                                      details: `Committed ${newStaged.length} attachment file(s) directly: ${newStaged.map(f => f.name).join(', ')}`
+                                    };
+                                    const updatedLogs = [...(auditTask.auditLog || []), attachmentUpdateLog];
+                                    const serverPayload = {
+                                      ...auditTask,
+                                      auditLog: JSON.stringify(updatedLogs)
+                                    };
+                                    try {
+                                      await fetch(`${API_BASE}/${auditTask.id}`, {
+                                        method: 'PUT',
+                                        headers: {'Content-Type': 'application/json'},
+                                        body: JSON.stringify(serverPayload)
+                                      });
+                                    } catch (err) {
+                                      console.error(err);
+                                    }
+                                    setAuditTask({
+                                      ...auditTask,
+                                      auditLog: updatedLogs
+                                    });
+                                    setTasks(prev => prev.map(t => t.id === auditTask.id ? { ...t, auditLog: updatedLogs } : t));
+                                  }
+                                }
+                              }}
+                              className="absolute inset-0 opacity-0 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        {/* List of Attached files */}
+                        <div className="lg:col-span-2 space-y-2.5 max-h-[160px] overflow-y-auto custom-scrollbar pr-1.5 flex flex-col justify-start">
+                          {(() => {
+                            const targetKey = 'sflow_attachments_' + auditTask.ticketId;
+                            const listStr = localStorage.getItem(targetKey);
+                            const list = listStr ? JSON.parse(listStr) : [];
+                            
+                            if (list.length === 0) {
+                              return (
+                                <div className="h-full flex flex-col items-center justify-center p-6 text-center border border-dashed border-slate-800 bg-slate-950/10 rounded-2xl select-none">
+                                  <Paperclip className="w-5 h-5 text-slate-700 mb-2 animate-bounce" />
+                                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">No active case files on record</span>
+                                  <span className="text-[8px] text-slate-600 font-bold uppercase mt-1">Staging directory currently empty</span>
+                                </div>
+                              );
+                            }
+
+                            return list.map((doc: any, i: number) => {
+                              const isImg = doc.type.startsWith('image/') || doc.name.toLowerCase().endsWith('.png') || doc.name.toLowerCase().endsWith('.jpg') || doc.name.toLowerCase().endsWith('.jpeg') || doc.name.toLowerCase().endsWith('.svg');
+                              const isCsv = doc.name.toLowerCase().endsWith('.csv');
+                              const isTxt = doc.type === 'text/plain' || doc.name.toLowerCase().endsWith('.txt') || doc.name.toLowerCase().endsWith('.log');
+                              const isPdf = doc.name.toLowerCase().endsWith('.pdf');
+
+                              return (
+                                <div key={i} className="flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-850 hover:border-slate-800 transition-colors">
+                                  <div className="flex items-center gap-3 min-w-0 flex-1 font-sans">
+                                    <div className="p-2 bg-slate-900 rounded-lg shrink-0 border border-slate-800">
+                                      {isImg ? <ImageIcon className="w-4 h-4 text-emerald-400" /> : isCsv ? <FileSpreadsheet className="w-4 h-4 text-emerald-400" /> : <FileText className="w-4 h-4 text-blue-400" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs text-slate-200 mt-0.5 font-bold truncate" title={doc.name}>{doc.name}</p>
+                                      <p className="text-[9px] text-slate-500 font-mono">{(doc.size / 1024).toFixed(1)} KB • {format(parseISO(doc.uploadedAt), 'MMM dd, HH:mm')}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-1.5 shrink-0 pl-1">
+                                    {/* Smart View Button */}
+                                    <button 
+                                      type="button"
+                                      onClick={() => setActiveSmartViewAttachment({ ...doc, ticketId: auditTask.ticketId, projectId: auditTask.projectId })}
+                                      className="p-1 px-2 hover:bg-slate-900 text-blue-400 hover:text-white rounded-lg border border-transparent hover:border-slate-800 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
+                                      title="Open in Smart View"
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-blue-400" />
+                                      <span className="hidden sm:inline text-[8px] tracking-wider font-extrabold text-blue-400">Inspect</span>
+                                    </button>
+
+                                    {/* Direct Download */}
+                                    <a 
+                                      href={doc.dataUrl} 
+                                      download={doc.name}
+                                      className="p-1.5 hover:bg-slate-900 text-slate-400 hover:text-white rounded-lg border border-transparent hover:border-slate-800 transition-all"
+                                      title="Download Native File"
+                                    >
+                                      <Download className="w-3.5 h-3.5 text-slate-400 hover:text-white" />
+                                    </a>
+
+                                    {/* Delete Attachment */}
+                                    <button 
+                                      type="button"
+                                      onClick={async () => {
+                                        if (confirm(`Are you sure you want to delete file "${doc.name}" from case logs?`)) {
+                                          const merged = list.filter((_: any, idx: number) => idx !== i);
+                                          localStorage.setItem(targetKey, JSON.stringify(merged));
+                                          // Log event dynamically to audit logs
+                                          const nowIso = new Date().toISOString();
+                                          const attachmentUpdateLog = {
+                                            timestamp: nowIso,
+                                            user: currentUser,
+                                            action: 'Attachment Vault Removed',
+                                            details: `Document deleted from Vault: ${doc.name}`
+                                          };
+                                          const updatedLogs = [...(auditTask.auditLog || []), attachmentUpdateLog];
+                                          const serverPayload = {
+                                            ...auditTask,
+                                            auditLog: JSON.stringify(updatedLogs)
+                                          };
+                                          try {
+                                            await fetch(`${API_BASE}/${auditTask.id}`, {
+                                              method: 'PUT',
+                                              headers: {'Content-Type': 'application/json'},
+                                              body: JSON.stringify(serverPayload)
+                                            });
+                                          } catch (err) {
+                                            console.error(err);
+                                          }
+                                          setAuditTask({
+                                            ...auditTask,
+                                            auditLog: updatedLogs
+                                          });
+                                          setTasks(prev => prev.map(t => t.id === auditTask.id ? { ...t, auditLog: updatedLogs } : t));
+                                        }
+                                      }}
+                                      className="p-1.5 hover:bg-red-500/10 hover:text-red-400 text-slate-500 rounded-lg transition-all"
+                                      title="Delete attachment"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Timeline Log Section */}
                     <div className="space-y-4 pt-4 border-t border-slate-800/60">
                        <div className="flex items-center justify-between">
@@ -8693,6 +9360,144 @@ Guidelines:
                     >
                       Dismiss Analytics Drilldown
                     </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Smart View / Attachment Lightbox Inspector Modal */}
+          <AnimatePresence>
+            {activeSmartViewAttachment && (
+              <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md animate-fade-in font-sans">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden backdrop-blur-xl"
+                >
+                  {/* Modal Header */}
+                  <div className="p-6 border-b border-slate-800 bg-slate-900/40 flex items-start justify-between min-h-[90px]">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[10px] bg-rose-500/10 border border-rose-500/25 text-rose-400 font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider font-sans">
+                          Smart Attachment Inspector
+                        </span>
+                        <span className="text-[10px] bg-slate-950 border border-slate-800 text-emerald-400 font-mono px-2 py-0.5 rounded-full font-bold">
+                          Direct Stream
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5 leading-tight font-sans">
+                        {activeSmartViewAttachment.name}
+                      </h3>
+                      <p className="text-[10px] text-slate-505 font-mono font-medium max-w-2xl mt-1 select-all break-all leading-relaxed text-slate-500">
+                        {attachmentStorageMode === 'local' ? (
+                          `${attachmentBasePath}\\${activeSmartViewAttachment.projectId || 'PROJECT'}\\${activeSmartViewAttachment.ticketId || 'CASE_ID'}\\${activeSmartViewAttachment.name}`
+                        ) : (
+                          `SECURE_SANDBOX://indexeddb/sflow_attachments_${activeSmartViewAttachment.ticketId || 'CASE_ID'}/${activeSmartViewAttachment.name}`
+                        )}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setActiveSmartViewAttachment(null)}
+                      className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all duration-250 shrink-0"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Content Preview Stage */}
+                  <div className="flex-1 overflow-y-auto p-6 bg-slate-950/40 flex flex-col items-center justify-center min-h-[300px]">
+                    {(() => {
+                      const fileType = activeSmartViewAttachment.type || '';
+                      const isImg = fileType.startsWith('image/') || 
+                                    activeSmartViewAttachment.name.toLowerCase().endsWith('.png') || 
+                                    activeSmartViewAttachment.name.toLowerCase().endsWith('.jpg') || 
+                                    activeSmartViewAttachment.name.toLowerCase().endsWith('.jpeg') || 
+                                    activeSmartViewAttachment.name.toLowerCase().endsWith('.svg');
+                      
+                      const isTextOrCode = fileType.startsWith('text/') || 
+                                           activeSmartViewAttachment.name.toLowerCase().endsWith('.txt') || 
+                                           activeSmartViewAttachment.name.toLowerCase().endsWith('.json') || 
+                                           activeSmartViewAttachment.name.toLowerCase().endsWith('.log') || 
+                                           activeSmartViewAttachment.name.toLowerCase().endsWith('.xml') || 
+                                           activeSmartViewAttachment.name.toLowerCase().endsWith('.csv');
+
+                      if (isImg && activeSmartViewAttachment.dataUrl) {
+                        return (
+                          <div className="relative max-h-[50vh] max-w-full rounded-2xl overflow-hidden border border-slate-800 bg-slate-950/60 p-4 shadow-xl flex items-center justify-center">
+                            <img 
+                              src={activeSmartViewAttachment.dataUrl} 
+                              alt={activeSmartViewAttachment.name} 
+                              className="max-h-[45vh] max-w-full object-contain rounded-xl"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        );
+                      }
+
+                      if (isTextOrCode && activeSmartViewAttachment.dataUrl) {
+                        try {
+                          // Try decoding base64 content
+                          const parts = activeSmartViewAttachment.dataUrl.split(',');
+                          if (parts.length > 1) {
+                            const decoded = atob(parts[1]);
+                            return (
+                              <div className="w-full h-[50vh] bg-slate-950 p-4 rounded-2xl border border-slate-850 font-mono text-xs text-slate-350 overflow-auto custom-scrollbar text-left line-clamp-[60] leading-relaxed select-text">
+                                <span className="text-[10px] text-zinc-500 font-black block border-b border-zinc-900 pb-2 mb-3 uppercase tracking-wider">Virtual Terminal Contents View (Raw Text)</span>
+                                <pre className="whitespace-pre-wrap word-break-all text-[11px] font-medium text-slate-300">{decoded}</pre>
+                              </div>
+                            );
+                          }
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }
+
+                      // Default metadata overview for PDF, office files or unspecified objects
+                      return (
+                        <div className="text-center p-8 bg-slate-950/60 rounded-2xl border border-slate-850 max-w-md w-full">
+                          <FileCode className="w-12 h-12 text-zinc-650 mx-auto mb-4" />
+                          <h4 className="text-sm font-black text-slate-300 uppercase tracking-widest leading-none font-sans">Smart Preview Terminal</h4>
+                          <p className="text-[10px] text-slate-500 uppercase mt-1.5 font-bold tracking-widest font-sans">Complex Content Stream Detected</p>
+                          
+                          <div className="mt-5 space-y-2 text-left bg-slate-950 p-4 rounded-xl border border-slate-900 font-mono text-[10px] text-slate-450 select-text">
+                            <div className="flex justify-between"><span className="text-slate-650">Mime Type:</span> <span className="font-semibold text-slate-300">{activeSmartViewAttachment.type || 'unknown/binary'}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-650">Byte Size:</span> <span className="font-semibold text-slate-300">{activeSmartViewAttachment.size} Bytes ({(activeSmartViewAttachment.size / 1024).toFixed(1)} KB)</span></div>
+                            <div className="flex justify-between border-t border-slate-900 pt-1.5"><span className="text-rose-400">Virtual Stream:</span> <span className="font-semibold text-rose-400">ACTIVE [BASE64]</span></div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Modal Footer Controls */}
+                  <div className="p-6 border-t border-slate-800 bg-slate-900/40 flex items-center justify-between">
+                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider leading-none font-sans">
+                      Secured KAUST ITSM Local Drive Sandbox
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const parts = activeSmartViewAttachment.dataUrl.split(',');
+                          const rawData = parts.length > 1 ? parts[1] : activeSmartViewAttachment.dataUrl;
+                          navigator.clipboard.writeText(rawData);
+                          alert('Data Payload Copied safely to clipboard!');
+                        }}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white rounded-xl text-[10.5px] font-black uppercase tracking-widest transition-all"
+                      >
+                        Copy Data Stream
+                      </button>
+                      <a 
+                        href={activeSmartViewAttachment.dataUrl} 
+                        download={activeSmartViewAttachment.name}
+                        onClick={() => setActiveSmartViewAttachment(null)}
+                        className="btn-primary px-5 py-2 rounded-xl text-[10.5px] font-black uppercase tracking-widest font-sans tracking-wider cursor-pointer flex items-center justify-center"
+                      >
+                        Download Original
+                      </a>
+                    </div>
                   </div>
                 </motion.div>
               </div>
