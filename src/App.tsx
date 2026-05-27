@@ -17,8 +17,10 @@ import {
   Activity, Clock, CheckCircle2, AlertCircle, Plus, 
   Search, Download, Trash2, LayoutDashboard, ListTodo, Filter, ChevronRight, ChevronLeft, ArrowUpDown, Settings, Save,
   Pencil, RotateCcw, AlertTriangle, Info, ShieldAlert, UserPlus, Users, Key,
-  History, Eye, Scale, Terminal, Calendar, ChevronDown, FileSpreadsheet, FileText, X, Palette
+  History, Eye, Scale, Terminal, Calendar, ChevronDown, FileSpreadsheet, FileText, X, Palette,
+  BookOpen, Sparkles, MessageSquare, Send, Brain
 } from 'lucide-react';
+import { GoogleGenAI } from '@google/genai';
 import { format, subDays, differenceInMinutes, parseISO as dateFnsParseISO, startOfDay, endOfDay, addDays } from 'date-fns';
 import { SupportTask, SupportLevel, Priority, TaskStatus, PRIORITY_COLORS, STATUS_COLORS, ProjectConfig, AppUser } from './types';
 import { cn, formatDuration, downloadCSV, exportToExcel, exportToPDF } from './lib/utils';
@@ -828,6 +830,23 @@ export default function App() {
   const [editingTask, setEditingTask] = useState<SupportTask | null>(null);
   const [auditTask, setAuditTask] = useState<SupportTask | null>(null);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+
+  // Knowledge Base States
+  const [kbSearchQuery, setKbSearchQuery] = useState('');
+  const [kbSelectedProject, setKbSelectedProject] = useState('All');
+  const [kbSelectedCategory, setKbSelectedCategory] = useState('All');
+  const [kbSelectedArticle, setKbSelectedArticle] = useState<SupportTask | null>(null);
+
+  // Chat Bot States
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'bot' | 'system'; text: string; timestamp: Date }[]>(() => [
+    {
+      sender: 'bot',
+      text: "Hello! I am your S-Flow GenAI Support Expert. I have read-access to all resolved similar issues and troubleshooting solutions in the knowledge base. Ask me any support-related question or describe a bug, and I will summarize matching solutions or help you draft resolution steps!",
+      timestamp: new Date()
+    }
+  ]);
+  const [isBotLoading, setIsBotLoading] = useState(false);
   
   // Log Edit Modal State
   const [logModalState, setLogModalState] = useState<{
@@ -1794,6 +1813,194 @@ export default function App() {
       }
     };
   }, [projectFilteredTasks, trendPeriod, customStartDate, customEndDate, projectConfigs]);
+
+  // --- Knowledge Base Logic ---
+  const kbTasks = useMemo(() => {
+    return tasks.filter(t => {
+      // Must be Resolved or Closed to be in Knowledge Base
+      const isResolvedOrClosed = t.status === 'Resolved' || t.status === 'Closed';
+      if (!isResolvedOrClosed) return false;
+      
+      // Admin/Manager can see ALL resolved/closed tasks (master level)
+      if (isManagerOrAdmin) return true;
+      
+      // Regular users are limited to tasks whose projectId is in userMappedProjects
+      return userMappedProjects.includes(t.projectId);
+    });
+  }, [tasks, isManagerOrAdmin, userMappedProjects]);
+
+  const kbCategories = useMemo(() => {
+    const list = kbTasks.map(t => t.category || '').filter(Boolean);
+    return Array.from(new Set(list)).sort();
+  }, [kbTasks]);
+
+  const filteredKbTasks = useMemo(() => {
+    return kbTasks.filter(t => {
+      // 1. Project filter
+      if (kbSelectedProject !== 'All' && t.projectId !== kbSelectedProject) return false;
+      
+      // 2. Category filter
+      if (kbSelectedCategory !== 'All' && (t.category || '') !== kbSelectedCategory) return false;
+      
+      // 3. Search query filter (Keyword score based or simple inclusion)
+      if (kbSearchQuery.trim()) {
+        const query = kbSearchQuery.toLowerCase().trim();
+        const words = query.split(/\s+/).filter(Boolean);
+        if (words.length === 0) return true;
+        
+        const textToSearch = [
+          t.ticketId,
+          t.projectId,
+          t.category,
+          t.subcategory,
+          t.description,
+          t.solution,
+          t.remarks,
+          t.assignedTo
+        ].map(s => (s || '').toLowerCase()).join(' ');
+        
+        return words.every(word => textToSearch.includes(word));
+      }
+      
+      return true;
+    });
+  }, [kbTasks, kbSelectedProject, kbSelectedCategory, kbSearchQuery]);
+
+  const handleSendChat = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!chatInput.trim() || isBotLoading) return;
+    
+    const userMsg = chatInput.trim();
+    setChatInput('');
+    
+    // Add user message to state
+    const newMsgs = [
+      ...chatMessages,
+      { sender: 'user' as const, text: userMsg, timestamp: new Date() }
+    ];
+    setChatMessages(newMsgs);
+    setIsBotLoading(true);
+    
+    // Step 1: Find background contextual tickets from kbTasks (already filtered by role mapped projects!)
+    const keywords = userMsg.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    
+    // Score each ticket
+    const scoredTasks = kbTasks.map(t => {
+      let score = 0;
+      const combinedText = [
+        t.ticketId,
+        t.category,
+        t.subcategory,
+        t.description,
+        t.solution,
+        t.remarks
+      ].map(s => (s || '').toLowerCase()).join(' ');
+      
+      keywords.forEach(word => {
+        if (combinedText.includes(word)) {
+          score += 1;
+          // Weighted scores
+          if ((t.category || '').toLowerCase().includes(word)) score += 2;
+          if ((t.subcategory || '').toLowerCase().includes(word)) score += 2;
+          if ((t.solution || '').toLowerCase().includes(word)) score += 3;
+          if ((t.description || '').toLowerCase().includes(word)) score += 2;
+        }
+      });
+      return { task: t, score };
+    })
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5) // Top 5 relevant tickets
+    .map(item => item.task);
+    
+    // Step 2: Initialize or check Gemini key
+    const apiKey = (process.env.GEMINI_API_KEY as string) || '';
+    
+    if (!apiKey) {
+      // Local Search Fallback mode
+      setTimeout(() => {
+        let reply = '';
+        if (scoredTasks.length > 0) {
+          reply = `🤖 **AI Assistant (Local Intelligence Fallback Mode)**:\nI found **${scoredTasks.length} highly relevant resolved ticket(s)** in the system database for your query. Here is a generated troubleshooting summary:\n\n`;
+          scoredTasks.forEach((t, idx) => {
+            reply += `### ${idx + 1}. [${t.ticketId}] (${t.category} > ${t.subcategory || 'General'})\n`;
+            reply += `* **Symptom / Description**: *${t.description.trim()}*\n`;
+            reply += `* **Technical Solution**: **${t.solution.trim()}**\n`;
+            if (t.remarks) reply += `* **Remarks**: ${t.remarks.trim()}\n`;
+            reply += `* **Resolved By**: ${t.assignedTo || 'Unassigned'} | **Project**: ${t.projectId}\n\n`;
+          });
+          reply += `---\n*💡 Note: To enable fully conversational and generative AI reasoning, make sure a valid Gemini API key is configured under the application server secrets.*`;
+        } else {
+          reply = `🤖 **AI Assistant (Local Intelligence Fallback Mode)**:\nNo exact matches found in the Resolved or Closed tickets database for "${userMsg}".\n\n**Suggestions matching your terms:**\n- Verify the spelling of keywords\n- Try typing broader categories like "Server", "Database", "Access", "VPN"\n- Create a new ticket if this is a novel problem!`;
+        }
+        
+        setChatMessages(prev => [
+          ...prev, 
+          { sender: 'bot', text: reply, timestamp: new Date() }
+        ]);
+        setIsBotLoading(false);
+      }, 800);
+      return;
+    }
+    
+    // Execute real Gemini API call!
+    try {
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+      
+      // format context
+      const formattedContext = scoredTasks.length > 0 
+        ? scoredTasks.map(t => `Ticket ID: ${t.ticketId}\nProject: ${t.projectId}\nCategory: ${t.category} > ${t.subcategory}\nSymptom: ${t.description}\nResolution: ${t.solution}\nRemarks: ${t.remarks || 'None'}`).join('\n---\n')
+        : "No previous resolved ticket matches found in the local database.";
+        
+      const systemInstruction = `You are "S-Flow GenAI Support Expert", an interactive AI assistant for the IT Support Task Management Portal.
+Your job is to help support agents solve technical issues by analyzing resolved similar tickets from the Knowledge Base database.
+
+Current Active User checking this data: ${currentLoggedInUserObj?.name || currentUser} (Role: ${currentLoggedInUserObj?.role || (isAdmin ? "Admin" : "User")})
+
+Here are the similar resolved tickets found in the system for this query:
+${formattedContext}
+
+Guidelines:
+1. Always be professional, extremely helpful, positive, and concise.
+2. Synthesize a step-by-step Troubleshooting Guide based on the solutions in the provided tickets to help the support agent.
+3. Be transparent and explicitly cite references to the tickets used (e.g., [INC-1001], [INC-1005]).
+4. If the resolved tickets don't completely cover the user's issue, explain that clearly and supplement with standard IT industry best practices (e.g. Active Directory, network troubleshooting, database management etc.) based on your general knowledge.
+5. Format the output beautifully using clean, high-contrast Markdown (headers, bold text, bullet points, standard indentations, blockquotes, and code blocks for errors or commands).`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [
+          { role: 'user', parts: [{ text: userMsg }] }
+        ],
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+        }
+      });
+      
+      const botText = response.text || "I apologize, but I could not formulate a response at this time.";
+      
+      setChatMessages(prev => [
+        ...prev, 
+        { sender: 'bot', text: botText, timestamp: new Date() }
+      ]);
+    } catch (e: any) {
+      console.error(e);
+      setChatMessages(prev => [
+        ...prev, 
+        { 
+          sender: 'system', 
+          text: `Error invoking Gemini AI Engine: ${e.message || 'Network Error'}. Please verify your network connection or Gemini API key configuration.`, 
+          timestamp: new Date() 
+        }
+      ]);
+    } finally {
+      setIsBotLoading(false);
+    }
+  };
 
   // --- Handlers ---
   const handleSaveTask = async (e: React.FormEvent) => {
@@ -3381,6 +3588,19 @@ export default function App() {
               >
                 <ListTodo className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                 <span className="hidden md:inline">My Workbook</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setActiveTab('knowledge-base' as any);
+                  setKbSelectedArticle(null);
+                }}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap animate-pulse-subtle",
+                  (activeTab as string) === 'knowledge-base' ? "bg-slate-800 text-white shadow-lg shadow-black/20" : "text-slate-500 hover:text-slate-300"
+                )}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span className="hidden md:inline">Knowledge Base</span>
               </button>
               {isManagerOrAdmin && (
                 <button 
@@ -5834,6 +6054,329 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </motion.div>
+            )}
+
+            {(activeTab as string) === 'knowledge-base' && (
+              <motion.div 
+                key="knowledge-base"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-6 animate-fade-in"
+              >
+                {/* Header Stats bar */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="chart-container p-6 bg-slate-900/40 border-l-4 border-sky-500 rounded-xl relative overflow-hidden flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Knowledge Scope</p>
+                      <h3 className="text-2xl font-black text-white uppercase tracking-tight mt-1 leading-none">
+                        {isManagerOrAdmin ? "MASTER LEVEL" : "PROJECT BOUND"}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1.5 uppercase tracking-wide">
+                        {isManagerOrAdmin ? "Entire enterprise project base accessible" : "Assigned projects knowledge base"}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-sky-500/10 rounded-xl text-sky-400">
+                      <Brain className="w-6 h-6 animate-pulse-subtle" />
+                    </div>
+                  </div>
+                  
+                  <div className="chart-container p-6 bg-slate-900/40 border-l-4 border-emerald-500 rounded-xl relative overflow-hidden flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Resolved Base</p>
+                      <h3 className="text-2xl font-black text-white uppercase tracking-tight mt-1 leading-none font-mono">
+                        {kbTasks.length} Articles
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1.5 uppercase tracking-wide">
+                        Verified solutions synchronized from MySQL
+                      </p>
+                    </div>
+                    <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                  </div>
+
+                  <div className="chart-container p-6 bg-slate-900/40 border-l-4 border-violet-500 rounded-xl relative overflow-hidden flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">AI Agent Status</p>
+                      <h3 className="text-2xl font-black text-white uppercase tracking-tight mt-1 leading-none uppercase">
+                        {process.env.GEMINI_API_KEY ? "AI ACTIVE" : "LOCAL SEARCH"}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1.5 uppercase tracking-wide">
+                        {process.env.GEMINI_API_KEY ? "Gemini 3.5 conversational reasoning active" : "Using local search model"}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Content Area: Split List & ChatBot */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  
+                  {/* Left Column (7 cols): Searching and Article Viewing */}
+                  <div className="lg:col-span-7 space-y-6">
+                    <div className="chart-container p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                      
+                      {/* Search and Filters */}
+                      <div className="space-y-4 mb-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                          <div className="text-left">
+                            <h3 className="text-sm font-black text-white uppercase tracking-wider mb-1 leading-none">Search Resolved Incident Base</h3>
+                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-0.5">Explore historic fixes and verified SLA solutions</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {/* Project filter */}
+                          <div className="text-left">
+                            <label className="label-sm text-slate-400 mb-1.5 block">Target Project</label>
+                            <select 
+                              value={kbSelectedProject} 
+                              onChange={(e) => {
+                                setKbSelectedProject(e.target.value);
+                                setKbSelectedArticle(null);
+                              }}
+                              className="input-field w-full text-xs"
+                            >
+                              <option value="All">All Projects</option>
+                              {PROJECTS_LIST.filter(p => isManagerOrAdmin || userMappedProjects.includes(p)).map(pName => (
+                                <option key={pName} value={pName}>{pName}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Category Filter */}
+                          <div className="text-left">
+                            <label className="label-sm text-slate-400 mb-1.5 block">Category</label>
+                            <select 
+                              value={kbSelectedCategory} 
+                              onChange={(e) => {
+                                setKbSelectedCategory(e.target.value);
+                                setKbSelectedArticle(null);
+                              }}
+                              className="input-field w-full text-xs"
+                            >
+                              <option value="All">All Categories</option>
+                              {kbCategories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Keyword Match field */}
+                          <div className="relative text-left">
+                            <label className="label-sm text-slate-400 mb-1.5 block">Terms Search</label>
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-500" />
+                              <input 
+                                type="text"
+                                value={kbSearchQuery}
+                                onChange={(e) => {
+                                  setKbSearchQuery(e.target.value);
+                                  setKbSelectedArticle(null);
+                                }}
+                                placeholder="Refine keywords..."
+                                className="input-field pl-8 w-full text-xs"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Displaying selected article or list */}
+                      {kbSelectedArticle ? (
+                        /* Full Article View */
+                        <div className="border border-slate-800 rounded-xl bg-slate-950/60 p-6 space-y-4">
+                          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <button 
+                              onClick={() => setKbSelectedArticle(null)}
+                              className="text-[10px] font-black text-sky-400 hover:text-sky-300 uppercase tracking-wider flex items-center gap-1.5 bg-sky-500/5 hover:bg-sky-500/10 px-2.5 py-1.5 rounded transition-all border border-sky-500/10"
+                            >
+                              ← Back to Article Index
+                            </button>
+                            <div className="flex items-center gap-2 font-mono text-[10.5px]">
+                              <span className="text-slate-500">Ticket ID:</span>
+                              <span className="text-white font-black bg-slate-800 px-2 py-0.5 rounded border border-slate-700">{kbSelectedArticle.ticketId}</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-900/50 p-3 rounded-lg border border-slate-800/40 text-left">
+                            <div>
+                              <p className="text-[8px] text-slate-500 uppercase font-black tracking-wider leading-none">Project</p>
+                              <p className="text-[10px] text-white font-bold mt-1 uppercase leading-none">{kbSelectedArticle.projectId}</p>
+                            </div>
+                            <div>
+                              <p className="text-[8px] text-slate-500 uppercase font-black tracking-wider leading-none">Domain Hierarchy</p>
+                              <p className="text-[10px] text-indigo-400 font-bold mt-1 uppercase leading-none truncate" title={`${kbSelectedArticle.category} > ${kbSelectedArticle.subcategory || "General"}`}>{kbSelectedArticle.category} &gt; {kbSelectedArticle.subcategory || "General"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[8px] text-slate-500 uppercase font-black tracking-wider leading-none">Support Level</p>
+                              <p className="text-[10px] text-amber-500 font-bold mt-1 uppercase leading-none">{kbSelectedArticle.supportLevel} tier</p>
+                            </div>
+                            <div>
+                              <p className="text-[8px] text-slate-500 uppercase font-black tracking-wider leading-none">Owner Engineer</p>
+                              <p className="text-[10px] text-emerald-400 font-bold mt-1 uppercase leading-none truncate">{kbSelectedArticle.assignedTo || "Unassigned"}</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 text-left">
+                            <div>
+                              <h4 className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Issue Symptom &amp; Description</h4>
+                              <div className="bg-slate-900/30 p-3.5 rounded border border-slate-800/60 text-xs text-slate-300 leading-relaxed max-h-[160px] overflow-y-auto whitespace-pre-wrap font-mono">
+                                {kbSelectedArticle.description}
+                              </div>
+                            </div>
+
+                            <div>
+                              <h4 className="text-[10px] text-emerald-400 font-black uppercase tracking-wider mb-1 flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                Verified Resolution &amp; Solution Details
+                              </h4>
+                              <div className="bg-emerald-950/10 p-4 rounded-xl border border-emerald-500/20 text-xs text-slate-200 leading-relaxed font-sans whitespace-pre-wrap shadow-inner">
+                                {kbSelectedArticle.solution}
+                              </div>
+                            </div>
+
+                            {kbSelectedArticle.remarks && (
+                              <div>
+                                <h4 className="text-[10px] text-slate-400 font-black uppercase tracking-wider mb-1">Additional Operational Remarks</h4>
+                                <div className="bg-slate-900/30 p-3.5 rounded border border-slate-800/60 text-xs text-slate-300 italic whitespace-pre-wrap">
+                                  {kbSelectedArticle.remarks}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="pt-2 text-right text-[9px] text-slate-500 font-mono">
+                            Article resolved on: {kbSelectedArticle.closureDate ? format(parseISO(kbSelectedArticle.closureDate), 'LLL d, yyyy HH:mm:ss') : "N/A"}
+                          </div>
+                        </div>
+                      ) : (
+                        /* Article List view */
+                        <div className="space-y-3 animate-fade-in">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-left mb-1">
+                            Matching Resolved Articles ({filteredKbTasks.length})
+                          </p>
+                          
+                          <div className="max-h-[500px] overflow-y-auto pr-1 space-y-2 mb-3 scrollbar-thin">
+                            {filteredKbTasks.map(art => (
+                              <div 
+                                key={art.id}
+                                onClick={() => setKbSelectedArticle(art)}
+                                className="group p-4 bg-slate-950/40 hover:bg-slate-900/60 border border-slate-800/60 hover:border-sky-500/30 rounded-xl cursor-pointer text-left transition-all hover:translate-x-0.5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                              >
+                                <div className="space-y-1.5 flex-1 select-none">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-mono text-[10px] text-white font-black bg-slate-800 px-1.5 py-0.5 rounded">{art.ticketId}</span>
+                                    <span className="text-[9px] font-black uppercase tracking-tighter text-blue-400 bg-blue-500/5 px-1.5 py-0.5 rounded border border-blue-500/10">{art.projectId}</span>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400 bg-indigo-500/5 px-2 py-0.5 rounded border border-indigo-500/15">
+                                      {art.category} {art.subcategory ? `> ${art.subcategory}` : ''}
+                                    </span>
+                                  </div>
+                                  <h4 className="text-xs text-slate-300 group-hover:text-white font-bold leading-snug tracking-normal truncate max-w-[420px]">
+                                    {art.description}
+                                  </h4>
+                                  <p className="text-[10px] text-emerald-400/80 font-mono font-medium truncate max-w-[420px] italic">
+                                    Solution: {art.solution}
+                                  </p>
+                                </div>
+                                
+                                <div className="flex items-center gap-2 shrink-0 md:self-center select-none">
+                                  <span className="text-[9px] text-slate-500 font-mono">Resolved: {art.closureDate ? format(parseISO(art.closureDate), 'LLL d') : ''}</span>
+                                  <div className="p-1 px-2.5 bg-slate-800 group-hover:bg-sky-500 text-slate-500 group-hover:text-white text-[10px] font-black uppercase rounded tracking-wider transition-colors">
+                                    Read Info
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+
+                            {filteredKbTasks.length === 0 && (
+                              <div className="py-20 text-center border-2 border-dashed border-slate-800 rounded-3xl">
+                                <BookOpen className="w-8 h-8 text-slate-700 mx-auto mb-3" />
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">No matching resolved solutions found in index</p>
+                                <p className="text-[10px] text-slate-600 uppercase font-black mt-1">Try broadening your category or query filters</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column (5 cols): Interactive AI Troubleshooting Bot */}
+                  <div className="lg:col-span-5">
+                    <div className="chart-container p-6 bg-slate-900/40 border-l-4 border-violet-500 rounded-2xl flex flex-col h-[650px]">
+                      
+                      {/* Bot Title Header */}
+                      <div className="flex items-center gap-3 border-b border-slate-800 pb-4 mb-4 text-left select-none">
+                        <div className="p-2 bg-violet-500/10 rounded-xl text-violet-400">
+                          <MessageSquare className="w-5 h-5 animate-pulse-subtle" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black text-white uppercase tracking-wider leading-none">AI Chatbot Troubleshooter</h3>
+                          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Reads local task solutions for active reasoning</p>
+                        </div>
+                      </div>
+
+                      {/* Chat Messages Log */}
+                      <div className="flex-1 overflow-y-auto space-y-4 pr-1 mb-4 scrollbar-thin text-left font-sans">
+                        {chatMessages.map((msg, i) => (
+                          <div 
+                            key={i}
+                            className={cn(
+                              "flex flex-col max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed font-sans shadow-sm transition-all",
+                              msg.sender === 'user' 
+                                ? "bg-violet-500/10 text-slate-200 ml-auto border border-violet-500/10 rounded-br-none" 
+                                : msg.sender === 'system'
+                                ? "bg-red-950/20 text-red-300 border border-red-900/30 max-w-[100%] rounded-lg font-mono text-[10px]"
+                                : "bg-slate-950/80 text-slate-300 mr-auto border border-slate-800/80 rounded-bl-none"
+                            )}
+                          >
+                            <div className="font-sans break-words whitespace-pre-wrap">
+                              {msg.text}
+                            </div>
+                            <span className="text-[8px] text-slate-500 italic mt-1 text-right block leading-none font-mono">
+                              {format(msg.timestamp, 'HH:mm:ss')}
+                            </span>
+                          </div>
+                        ))}
+                        
+                        {/* Bot is loading typing indicator */}
+                        {isBotLoading && (
+                          <div className="bg-slate-950/80 text-slate-300 mr-auto border border-slate-800/80 rounded-2xl rounded-bl-none p-3 text-xs flex items-center gap-1.5 max-w-[120px] select-none">
+                            <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bot Input field */}
+                      <form onSubmit={(e) => handleSendChat(e)} className="flex gap-2 border-t border-slate-800/60 pt-4">
+                        <input 
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          disabled={isBotLoading}
+                          placeholder={isBotLoading ? "AI reasoning in progress..." : "Ask me anything (e.g. Incidents with DB login?)"}
+                          className="input-field flex-1 text-xs px-3.5"
+                        />
+                        <button 
+                          type="submit" 
+                          disabled={isBotLoading || !chatInput.trim()}
+                          className="px-4 py-2.5 bg-violet-500 hover:bg-violet-600 disabled:bg-slate-800 text-white font-black uppercase text-[10px] tracking-widest rounded-xl flex items-center gap-1.5 transition-all shadow-lg active:scale-95 disabled:pointer-events-none"
+                        >
+                          <Send className="w-4 h-4" />
+                          Send
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
                 </div>
               </motion.div>
             )}
