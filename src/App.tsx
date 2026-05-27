@@ -1824,6 +1824,11 @@ export default function App() {
       return;
     }
 
+    if ((formData.status === 'Resolved' || formData.status === 'Closed') && (!formData.solution || !formData.solution.trim())) {
+      alert("Error: Please provide a Technical Solution when status is Resolved or Closed.");
+      return;
+    }
+
     const actionLabel = editingTask ? 'Update' : 'Commit New';
     const confirmationMessage = editingTask 
       ? `Are you sure you want to update ticket record ${editingTask.ticketId} in the database? This action will save and overwrite all current values.`
@@ -3255,13 +3260,16 @@ export default function App() {
             )}
 
             <div>
-              <label className="label-sm">Technical Solution</label>
+              <label className="label-sm">
+                Technical Solution {(formData.status === 'Resolved' || formData.status === 'Closed') && <span className="text-red-500">*</span>}
+              </label>
               <textarea 
                 className="input-field min-h-[80px] resize-none disabled:opacity-50 disabled:bg-slate-900/40 disabled:cursor-not-allowed" 
-                placeholder={editingTask ? "Technical solution is locked. Use history logs to modify." : "Describe the solution provided..."}
+                placeholder={(formData.status === 'Resolved' || formData.status === 'Closed') ? "Describe the solution provided... (Mandatory)" : (editingTask ? "Technical solution is locked. Use history logs to modify." : "Describe the solution provided...")}
                 value={formData.solution || ''}
                 onChange={e => setFormData({ ...formData, solution: e.target.value })}
-                disabled={!!editingTask}
+                disabled={!!editingTask && formData.status !== 'Resolved' && formData.status !== 'Closed'}
+                required={formData.status === 'Resolved' || formData.status === 'Closed'}
               />
             </div>
 
