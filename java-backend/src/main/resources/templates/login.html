@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>SupportFlow - Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-card { background-color: #1e293b; border: 1px solid #334155; border-radius: 1rem; width: 100%; max-width: 400px; padding: 2rem; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="login-card shadow-lg">
+        <h3 class="text-center mb-4">SupportFlow</h3>
+        <p class="text-center text-secondary small">Access the Support Dashboard</p>
+        <form th:action="@{/}" method="get">
+            <div class="mb-3">
+                <label class="form-label small text-secondary fw-bold">USERNAME</label>
+                <input type="text" class="form-control bg-dark text-white border-secondary" placeholder="admin@supportflow.com">
+            </div>
+            <div class="mb-4">
+                <label class="form-label small text-secondary fw-bold">PASSWORD</label>
+                <input type="password" class="form-control bg-dark text-white border-secondary" placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn btn-primary w-full py-2 fw-bold">LOG IN</button>
+        </form>
+    </div>
+</body>
+</html>

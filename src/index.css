@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-200 antialiased;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-slate-900/50 border border-slate-800 backdrop-blur-md;
+  }
+
+  .chart-container {
+    @apply bg-slate-900/30 border border-slate-800 backdrop-blur-sm rounded-2xl;
+  }
+
+  .input-field {
+    @apply w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all;
+  }
+
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-lg text-sm font-semibold transition-colors cursor-pointer;
+  }
+
+  .btn-secondary {
+    @apply bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-2 rounded-lg text-xs font-bold transition-all;
+  }
+
+  .label-sm {
+    @apply text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1.5 block;
+  }
+}
+
+/* --- Theme Variables and Custom Overrides --- */
+
+.theme-cosmic {
+  color-scheme: dark;
+}
+
+/* Minimalist Nordic Frost - Crisp, Elegant Light Theme */
+.theme-frost {
+  --color-slate-950: #f4f6f9; /* Slate pale white background */
+  --color-slate-900: #ffffff; /* pure white for panels */
+  --color-slate-850: #f8fafc; /* Slate 50 sub-panels */
+  --color-slate-800: #e2e8f0; /* Clear light slate border */
+  --color-slate-700: #cbd5e1; /* Slate 300 grid / disabled borders */
+  --color-slate-650: #94a3b8; /* Slate 400 indicators */
+  --color-slate-600: #64748b; /* Slate 500 helpers */
+  --color-slate-550: #475569; /* Slate 600 captions */
+  --color-slate-500: #334155; /* Slate 700 descriptions */
+  --color-slate-400: #1e293b; /* Slate 800 subheaders */
+  --color-slate-300: #0f172a; /* Slate 900 list item text */
+  --color-slate-200: #0f172a; /* Slate 900 standard body text */
+  --color-slate-100: #020617; /* Slate 950 headers */
+  --color-slate-50: #020617;  /* High contract deep text */
+  --color-indigo-950: #eef2ff;
+  --color-indigo-900: #e0e7ff;
+  --color-indigo-800: #c7d2fe;
+  --color-indigo-500: #4f46e5;
+  --color-indigo-400: #6366f1;
+  --color-blue-600: #2563eb;
+  --color-blue-500: #3b82f6;
+
+  color-scheme: light;
+  background-color: #f4f6f9 !important;
+  color: #1e293b !important;
+}
+
+/* Keep high-contrast text and interactive action buttons white inside the light theme */
+.theme-frost button .hidden.sm\:inline, 
+.theme-frost button.text-white,
+.theme-frost .btn-primary,
+.theme-frost .bg-blue-600,
+.theme-frost .bg-red-500,
+.theme-frost .bg-emerald-500,
+.theme-frost .bg-rose-500,
+.theme-frost .bg-cyan-500,
+.theme-frost .bg-indigo-600,
+.theme-frost .bg-indigo-500,
+.theme-frost .text-white,
+.theme-frost .bg-blue-600 *,
+.theme-frost .bg-red-500 *,
+.theme-frost .bg-emerald-500 *,
+.theme-frost .bg-rose-500 *,
+.theme-frost .bg-cyan-500 *,
+.theme-frost .bg-indigo-600 *,
+.theme-frost .bg-indigo-500 * {
+  color: #ffffff !important;
+}
+
+/* Emerald Forest - Deep Organic Soft Botanical Dark Theme */
+.theme-emerald {
+  --color-slate-950: #0b110b; /* Moss dark base */
+  --color-slate-900: #121c12; /* Forest shade panels */
+  --color-slate-850: #162416; /* Shady pine panels */
+  --color-slate-800: #1e301e; /* Herb green borders */
+  --color-slate-700: #2b452b; /* Jade edges */
+  --color-slate-650: #3b5e3b; /* Sage accents */
+  --color-slate-600: #4d7a4d; /* Soft juniper leaf */
+  --color-slate-500: #6fa66f; /* Fern green captions */
+  --color-slate-400: #8ecf8e; /* Pale mint fields */
+  --color-slate-300: #b8ebb8; /* Bright mint reading texts */
+  --color-slate-200: #daf7da; /* Clear light-sage text */
+  --color-slate-100: #f0fff0; /* Evergreen peak glow highlights */
+  --color-slate-50: #f7fff7;
+  
+  --color-indigo-950: #064e3b;
+  --color-indigo-900: #065f46;
+  --color-indigo-500: #10b981;
+  --color-indigo-400: #34d399;
+  --color-indigo-600: #059669;
+  --color-blue-500: #06b6d4;
+  --color-blue-600: #0891b2;
+
+  color-scheme: dark;
+  background-color: #0b110b !important;
+  color: #b8ebb8 !important;
+}
+
+/* Cyberpunk Amber - High Contrast Neon Carbon Theme */
+.theme-cyber {
+  --color-slate-950: #050505; /* Black carbon floor */
+  --color-slate-900: #0c0c0c; /* Heavy metal engine panel */
+  --color-slate-850: #141414; /* Fuel cell dividers */
+  --color-slate-800: #252525; /* Concrete structures */
+  --color-slate-700: #363636; /* Rebar wires */
+  --color-slate-650: #555555; /* Lead conduits */
+  --color-slate-600: #777777; /* Steel plate numbers */
+  --color-slate-500: #999999; /* Warn hazard details */
+  --color-slate-400: #bbbbbb; /* Iron text */
+  --color-slate-300: #dddddd; /* Silicon displays */
+  --color-slate-200: #f59e0b; /* Amber visual active warnings */
+  --color-slate-100: #fbbf24; /* Incandescent grid displays */
+  --color-slate-50: #fef08a;
+
+  --color-indigo-950: #451a03;
+  --color-indigo-900: #7c2d12;
+  --color-indigo-500: #ea580c;
+  --color-indigo-400: #f97316;
+  --color-indigo-600: #c2410c;
+  --color-blue-500: #d97706;
+  --color-blue-600: #b45309;
+
+  color-scheme: dark;
+  background-color: #050505 !important;
+  color: #f59e0b !important;
+}
+
+
