@@ -939,6 +939,13 @@ export default function App() {
     }
   };
   
+  const [currentUser, setCurrentUser] = useState<string>(() => {
+    return localStorage.getItem('sflow_current_user') || 'Admin';
+  });
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    return localStorage.getItem('sflow_is_logged_in') === 'true';
+  });
+
   // Custom workbook columns config
   interface WorkbookColumn {
     id: string;
@@ -968,7 +975,8 @@ export default function App() {
   ], []);
 
   const [workbookColumns, setWorkbookColumns] = useState<WorkbookColumn[]>(() => {
-    const saved = localStorage.getItem('workbook_columns_v6');
+    const initialUser = localStorage.getItem('sflow_current_user') || 'Admin';
+    const saved = localStorage.getItem(`sflow_columns_${initialUser}`) || localStorage.getItem('workbook_columns_v6');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -998,35 +1006,52 @@ export default function App() {
         console.error(e);
       }
     }
-    const defaultData = [
-      { id: 'ticketId', label: 'ID', visible: true },
-      { id: 'projectId', label: 'Project', visible: true },
-      { id: 'supportLevel', label: 'Level', visible: true },
-      { id: 'priority', label: 'Priority', visible: true },
-      { id: 'category', label: 'Category', visible: true },
-      { id: 'subcategory', label: 'Subcategory', visible: true },
-      { id: 'status', label: 'Status', visible: true },
-      { id: 'description', label: 'Issue Description', visible: true },
-      { id: 'createdBy', label: 'Owner', visible: true },
-      { id: 'assignedTo', label: 'Assignee', visible: true },
-      { id: 'generationDate', label: 'Created', visible: true },
-      { id: 'responseDate', label: 'Response Date', visible: true },
-      { id: 'closureDate', label: 'Resolution Date', visible: true },
-      { id: 'solution', label: 'Resolution Description', visible: true },
-      { id: 'remarks', label: 'Remarks', visible: true },
-      { id: 'responseSla', label: 'Response SLA Status', visible: true },
-      { id: 'resolutionSla', label: 'Resolution SLA Status', visible: true },
-      { id: 'aging', label: 'Aging', visible: true },
-    ];
-    return defaultData;
+    return DEFAULT_WORKBOOK_COLUMNS;
   });
 
   const [isColumnsPanelOpen, setIsColumnsPanelOpen] = useState<boolean>(false);
 
   const saveColumns = (newCols: WorkbookColumn[]) => {
     setWorkbookColumns(newCols);
-    localStorage.setItem('workbook_columns_v6', JSON.stringify(newCols));
+    localStorage.setItem(`sflow_columns_${currentUser}`, JSON.stringify(newCols));
   };
+
+  // Sync columns config dynamically when currentUser switches
+  useEffect(() => {
+    if (!currentUser) return;
+    const saved = localStorage.getItem(`sflow_columns_${currentUser}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const defaultMap = new Map(DEFAULT_WORKBOOK_COLUMNS.map(c => [c.id, c]));
+          const merged = DEFAULT_WORKBOOK_COLUMNS.map(defCol => {
+            const found = parsed.find((p: any) => p.id === defCol.id);
+            return found ? { ...defCol, visible: found.visible } : defCol;
+          });
+          const ordered = parsed
+            .map((p: any) => {
+              const base = defaultMap.get(p.id);
+              if (!base) return null;
+              return { ...base, visible: p.visible };
+            })
+            .filter(Boolean) as WorkbookColumn[];
+          
+          merged.forEach(m => {
+            if (!ordered.find(o => o.id === m.id)) {
+              ordered.push(m);
+            }
+          });
+          setWorkbookColumns(ordered);
+          return;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    // Default to show ALL columns if not set by user
+    setWorkbookColumns(DEFAULT_WORKBOOK_COLUMNS);
+  }, [currentUser, DEFAULT_WORKBOOK_COLUMNS]);
   
   // Workbook sorting states (Default sorting: generationDate descending - newly created tickets on top)
   const [workbookSortCol, setWorkbookSortCol] = useState<string>('generationDate');
@@ -1043,21 +1068,15 @@ export default function App() {
   
   // Dynamic Projects List
   const PROJECTS_LIST = useMemo(() => projectsDB.map(p => p.name), [projectsDB]);
-  const [currentUser, setCurrentUser] = useState<string>(() => {
-    return localStorage.getItem('sflow_current_user') || 'Admin';
-  });
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    return localStorage.getItem('sflow_is_logged_in') === 'true';
-  });
 
-  const [theme, setTheme] = useState<'cosmic' | 'frost' | 'emerald' | 'cyber'>(() => {
+  const [theme, setTheme] = useState<'cosmic' | 'frost' | 'emerald' | 'cyber' | 'sapphire' | 'rose'>(() => {
     const saved = localStorage.getItem(`sflow_theme_${localStorage.getItem('sflow_current_user') || 'Admin'}`);
     return (saved as any) || 'cosmic';
   });
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
 
   useEffect(() => {
-    const themeClasses = ['theme-cosmic', 'theme-frost', 'theme-emerald', 'theme-cyber'];
+    const themeClasses = ['theme-cosmic', 'theme-frost', 'theme-emerald', 'theme-cyber', 'theme-sapphire', 'theme-rose'];
     themeClasses.forEach(cls => document.body.classList.remove(cls));
     document.body.classList.add(`theme-${theme}`);
     localStorage.setItem(`sflow_theme_${currentUser}`, theme);
@@ -1066,7 +1085,7 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       const savedUserTheme = localStorage.getItem(`sflow_theme_${currentUser}`) as any;
-      if (savedUserTheme && ['cosmic', 'frost', 'emerald', 'cyber'].includes(savedUserTheme)) {
+      if (savedUserTheme && ['cosmic', 'frost', 'emerald', 'cyber', 'sapphire', 'rose'].includes(savedUserTheme)) {
         setTheme(savedUserTheme);
       } else {
         setTheme('cosmic');
@@ -1099,6 +1118,22 @@ export default function App() {
           tooltipBg: '#0c0c0c',
           tooltipBorder: '#363636',
           tooltipText: '#f59e0b'
+        };
+      case 'sapphire':
+        return {
+          grid: '#1e2e4a',
+          text: '#93c5fd',
+          tooltipBg: '#0b1528',
+          tooltipBorder: '#1e2e4a',
+          tooltipText: '#ffffff'
+        };
+      case 'rose':
+        return {
+          grid: '#33171e',
+          text: '#fda4af',
+          tooltipBg: '#190a0f',
+          tooltipBorder: '#33171e',
+          tooltipText: '#ffffff'
         };
       case 'cosmic':
       default:
@@ -1341,8 +1376,8 @@ export default function App() {
   const [formData, setFormData] = useState<Partial<SupportTask>>({
     ticketId: '',
     projectId: '',
-    supportLevel: 'L1',
-    priority: 'P3',
+    supportLevel: '' as any, // Don't give default value, force user select
+    priority: '' as any, // Don't give default value, force user select
     status: 'Open',
     generationDate: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
     responseDate: '',
@@ -1351,7 +1386,7 @@ export default function App() {
     description: '',
     solution: '',
     remarks: '',
-    assignedTo: 'Admin',
+    assignedTo: '', // Don't give default value, force user select
     resolutionDetails: '',
     holdReason: '',
     category: '',
@@ -1764,12 +1799,28 @@ export default function App() {
   const handleSaveTask = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!formData.description || !formData.description.trim()) {
+      alert("Error: Please provide an Issue Description.");
+      return;
+    }
+    if (!formData.assignedTo || !formData.assignedTo.trim()) {
+      alert("Error: Please select and assign this ticket to an employee.");
+      return;
+    }
     if (!formData.category || !formData.category.trim()) {
       alert("Error: Please select a Category.");
       return;
     }
     if (!formData.subcategory || !formData.subcategory.trim()) {
       alert("Error: Please select a Subcategory.");
+      return;
+    }
+    if (!formData.supportLevel || !formData.supportLevel.trim()) {
+      alert("Error: Please select a Support Level.");
+      return;
+    }
+    if (!formData.priority || !formData.priority.trim()) {
+      alert("Error: Please select a Priority.");
       return;
     }
 
@@ -1862,8 +1913,8 @@ export default function App() {
             setFormData({
               ticketId: getNextTicketId(firstProj, updatedTasks),
               projectId: firstProj,
-              supportLevel: 'L1',
-              priority: 'P3',
+              supportLevel: '' as any,
+              priority: '' as any,
               status: 'Open',
               generationDate: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
               responseDate: '',
@@ -1872,7 +1923,7 @@ export default function App() {
               description: '',
               solution: '',
               remarks: '',
-              assignedTo: currentUser,
+              assignedTo: '',
               resolutionDetails: '',
               holdReason: '',
               category: '',
@@ -1979,8 +2030,8 @@ export default function App() {
     setFormData({
       ticketId: getNextTicketId(firstProj, tasks),
       projectId: firstProj,
-      supportLevel: 'L1',
-      priority: 'P3',
+      supportLevel: '' as any,
+      priority: '' as any,
       status: 'Open',
       generationDate: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
       responseDate: '',
@@ -1989,7 +2040,7 @@ export default function App() {
       description: '',
       solution: '',
       remarks: '',
-      assignedTo: currentUser,
+      assignedTo: '',
       resolutionDetails: '',
       holdReason: '',
       category: '',
@@ -2974,8 +3025,8 @@ export default function App() {
       >
         <div className="p-6 flex flex-col h-full overflow-y-auto custom-scrollbar">
           <div className="flex items-center gap-2 mb-8 p-1 border-b border-slate-800 pb-6">
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-            <h1 className="font-bold text-xl tracking-tight">ITSM Tool</h1>
+            <Activity className="w-4.5 h-4.5 text-blue-500 animate-pulse shrink-0" />
+            <span className="font-sans font-black tracking-widest text-[13px] text-white uppercase">ITSM PORTAL</span>
           </div>
 
           <form onSubmit={handleSaveTask} className="space-y-6">
@@ -3012,7 +3063,7 @@ export default function App() {
                       ...formData, 
                       projectId: newProjectId,
                       ticketId: nextId,
-                      assignedTo: available.includes(formData.assignedTo || '') ? formData.assignedTo : (available[0] || 'Admin')
+                      assignedTo: '' // Don't give default value, force user select
                     });
                   }}
                 >
@@ -3038,22 +3089,25 @@ export default function App() {
               </div>
 
               <div>
-                <label className="label-sm">Issue Description</label>
+                <label className="label-sm">Issue Description <span className="text-red-500">*</span></label>
                 <textarea 
                   className="input-field min-h-[80px] resize-none" 
-                  placeholder="Briefly describe the problem..."
-                  value={formData.description}
+                  placeholder="Briefly describe the problem... (Mandatory)"
+                  value={formData.description || ''}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
+                  required
                 />
               </div>
 
               <div>
-                <label className="label-sm">Assign To Employee</label>
+                <label className="label-sm">Assign To Employee <span className="text-red-500">*</span></label>
                 <select 
                   className="input-field"
-                  value={formData.assignedTo}
+                  value={formData.assignedTo || ''}
                   onChange={e => setFormData({ ...formData, assignedTo: e.target.value })}
+                  required
                 >
+                  <option value="">Select Employee...</option>
                   {(projectConfigs.find(c => c.projectId === formData.projectId)?.employees || []).map(u => (
                     <option key={u} value={u}>{u}</option>
                   ))}
@@ -3096,12 +3150,14 @@ export default function App() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label-sm">Support Level</label>
+                <label className="label-sm">Support Level <span className="text-red-500">*</span></label>
                 <select 
                   className="input-field"
-                  value={formData.supportLevel}
+                  value={formData.supportLevel || ''}
                   onChange={e => setFormData({ ...formData, supportLevel: e.target.value as SupportLevel })}
+                  required
                 >
+                  <option value="">Select Support Level...</option>
                   <option value="L1">L1</option>
                   <option value="L2">L2</option>
                   <option value="L3">L3</option>
@@ -3109,12 +3165,14 @@ export default function App() {
                 </select>
               </div>
               <div>
-                <label className="label-sm">Priority</label>
+                <label className="label-sm">Priority <span className="text-red-500">*</span></label>
                 <select 
                   className="input-field"
-                  value={formData.priority}
+                  value={formData.priority || ''}
                   onChange={e => setFormData({ ...formData, priority: e.target.value as Priority })}
+                  required
                 >
+                  <option value="">Select Priority...</option>
                   <option value="P1">P1 - Critical</option>
                   <option value="P2">P2 - High</option>
                   <option value="P3">P3 - Medium</option>
@@ -3260,79 +3318,6 @@ export default function App() {
               <ChevronRight className={cn("w-5 h-5 transition-transform", isSidebarOpen ? "rotate-180" : "rotate-0")} />
             </button>
             
-            {/* Elegant App Branding/Logo (always visible in header) */}
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-blue-500 animate-pulse shrink-0" />
-              <span className="font-sans font-black tracking-widest text-[11px] text-white uppercase hidden md:inline">ITSM PORTAL</span>
-            </div>
-
-            <div className="h-8 w-[1px] bg-slate-800/80 shrink-0" />
-
-            {/* Theme Customizer Dropdown - Positioned here for high visibility */}
-            <div className="relative shrink-0">
-              <button 
-                onClick={() => setShowThemeDropdown(!showThemeDropdown)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all group"
-                title="Customize Application Theme"
-              >
-                <Palette className="w-3.5 h-3.5 text-violet-400 group-hover:rotate-12 transition-transform" />
-                <span className="text-[10px] uppercase tracking-wider font-black hidden sm:inline">Theme</span>
-              </button>
-
-              <AnimatePresence>
-                {showThemeDropdown && (
-                  <>
-                    <div 
-                      className="fixed inset-0 z-40" 
-                      onClick={() => setShowThemeDropdown(false)}
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute left-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden"
-                    >
-                      <div className="px-4 py-2 bg-slate-950/40 border-b border-slate-800/50">
-                        <span className="text-[9px] uppercase tracking-widest font-black text-slate-500">Pick Custom Theme</span>
-                      </div>
-                      <div className="p-1.5 space-y-1">
-                        {[
-                          { id: 'cosmic', name: 'Cosmic Midnight', desc: 'Original deep indigo aura', iconColor: 'bg-indigo-500', activeBg: 'bg-indigo-500/10 border-indigo-500/30' },
-                          { id: 'frost', name: 'Nordic Frost', desc: 'Minimal clean daylight view', iconColor: 'bg-sky-400', activeBg: 'bg-sky-400/10 border-sky-400/30 font-bold' },
-                          { id: 'emerald', name: 'Emerald Forest', desc: 'Deep botanical sage green', iconColor: 'bg-emerald-500', activeBg: 'bg-emerald-500/10 border-emerald-500/30' },
-                          { id: 'cyber', name: 'Cyberpunk Amber', desc: 'Neon warning high-vis energy', iconColor: 'bg-amber-500', activeBg: 'bg-amber-500/10 border-amber-500/30' },
-                        ].map((themeOpt) => {
-                          const isActive = theme === themeOpt.id;
-                          return (
-                            <button
-                              key={themeOpt.id}
-                              onClick={() => {
-                                setTheme(themeOpt.id as any);
-                                setShowThemeDropdown(false);
-                              }}
-                              className={cn(
-                                "w-full text-left flex items-start gap-3 p-2 rounded-lg border transition-all duration-200",
-                                isActive 
-                                  ? `${themeOpt.activeBg} text-white` 
-                                  : "bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-                              )}
-                            >
-                              <div className={cn("w-3 h-3 rounded-full shrink-0 mt-0.5 shadow-sm", themeOpt.iconColor)} />
-                              <div>
-                                <p className="text-xs font-black tracking-wide">{themeOpt.name}</p>
-                                <p className="text-[9px] text-slate-500 font-bold leading-none mt-0.5">{themeOpt.desc}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="h-8 w-[1px] bg-slate-800/80 shrink-0" />
 
             <div className="flex items-center gap-1 bg-slate-900/60 rounded-lg p-1 border border-slate-800">
                <select 
@@ -3496,6 +3481,73 @@ export default function App() {
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
                 <span className="hidden sm:inline">Log Out</span>
               </button>
+            </div>
+
+            {/* Theme Customizer Dropdown - Positioned here for high visibility AFTER log out */}
+            <div className="relative shrink-0">
+              <button 
+                onClick={() => setShowThemeDropdown(!showThemeDropdown)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-all group h-11"
+                title="Customize Application Theme"
+              >
+                <Palette className="w-3.5 h-3.5 text-violet-400 group-hover:rotate-12 transition-transform" />
+                <span className="text-[10px] uppercase tracking-wider font-black hidden sm:inline">Theme</span>
+              </button>
+
+              <AnimatePresence>
+                {showThemeDropdown && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowThemeDropdown(false)}
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden"
+                    >
+                      <div className="px-4 py-2.5 bg-slate-950/40 border-b border-slate-800/50 flex items-center justify-between">
+                        <span className="text-[9px] uppercase tracking-widest font-black text-slate-500">Pick Custom Theme</span>
+                        <span className="text-[9px] uppercase tracking-wider font-bold text-violet-400 px-1.5 py-0.5 rounded bg-violet-500/10">UI/UX Settings</span>
+                      </div>
+                      <div className="p-1.5 space-y-1">
+                        {[
+                          { id: 'cosmic', name: 'Cosmic Midnight', desc: 'Deep cosmic space indigo', iconColor: 'bg-indigo-500', activeBg: 'bg-indigo-500/10 border-indigo-500/30' },
+                          { id: 'sapphire', name: 'Sapphire Ocean', desc: 'Calm deep sea cobalt blue', iconColor: 'bg-blue-500', activeBg: 'bg-blue-500/10 border-blue-500/30' },
+                          { id: 'emerald', name: 'Emerald Forest', desc: 'Restful soft botanical green', iconColor: 'bg-emerald-500', activeBg: 'bg-emerald-500/10 border-emerald-500/30' },
+                          { id: 'rose', name: 'Sunset Rose', desc: 'Luxury cherry wine velvet', iconColor: 'bg-rose-500', activeBg: 'bg-rose-500/10 border-rose-500/30' },
+                          { id: 'cyber', name: 'Cyberpunk Amber', desc: 'High-contrast hazard warning', iconColor: 'bg-amber-500', activeBg: 'bg-amber-500/10 border-amber-500/30' },
+                          { id: 'frost', name: 'Nordic Frost', desc: 'Crisp minimal daylight mode', iconColor: 'bg-sky-400', activeBg: 'bg-sky-400/10 border-sky-400/30' },
+                        ].map((themeOpt) => {
+                          const isActive = theme === themeOpt.id;
+                          return (
+                            <button
+                              key={themeOpt.id}
+                              onClick={() => {
+                                setTheme(themeOpt.id as any);
+                                setShowThemeDropdown(false);
+                              }}
+                              className={cn(
+                                "w-full text-left flex items-start gap-3 p-2 rounded-lg border transition-all duration-200",
+                                isActive 
+                                  ? `${themeOpt.activeBg} text-white font-bold` 
+                                  : "bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                              )}
+                            >
+                              <div className={cn("w-3 h-3 rounded-full shrink-0 mt-0.5 shadow-sm", themeOpt.iconColor)} />
+                              <div>
+                                <p className="text-xs font-black tracking-wide">{themeOpt.name}</p>
+                                <p className="text-[9px] text-slate-500 font-bold leading-none mt-0.5">{themeOpt.desc}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>

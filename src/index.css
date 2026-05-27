@@ -152,4 +152,62 @@
   color: #f59e0b !important;
 }
 
+/* Sapphire Ocean - Professional Deep Cobalt Blue Theme */
+.theme-sapphire {
+  --color-slate-950: #030712; /* Deep void navy background */
+  --color-slate-900: #0b1528; /* Premium sea-slab panels */
+  --color-slate-850: #0f1e38; /* Anchor sub-panels */
+  --color-slate-800: #1e2e4a; /* Deep sapphire sea wall border */
+  --color-slate-700: #2a3d5e; /* Blue-steel guidelines */
+  --color-slate-650: #3c5480; /* Muted coastal indicators */
+  --color-slate-600: #60a5fa; /* Sky blue helper highlights */
+  --color-slate-500: #93c5fd; /* Serene water blue descriptions */
+  --color-slate-400: #bfdbfe; /* Clear blue subheadings */
+  --color-slate-300: #e0f2fe; /* Luminous ocean text */
+  --color-slate-200: #f0f9ff; /* Pure tide text */
+  --color-slate-100: #ffffff; /* Sun-on-water glare */
+  --color-slate-50: #ffffff;
+  
+  --color-indigo-950: #0ea5e9;
+  --color-indigo-900: #10b981;
+  --color-indigo-500: #3b82f6;
+  --color-indigo-400: #60a5fa;
+  --color-indigo-600: #2563eb;
+  --color-blue-500: #06b6d4;
+  --color-blue-600: #0891b2;
+
+  color-scheme: dark;
+  background-color: #030712 !important;
+  color: #bfdbfe !important;
+}
+
+/* Sunset Rose - Soft Luxurious Plum & Cherry Velvet Theme */
+.theme-rose {
+  --color-slate-950: #100609; /* Deep velvet shadow background */
+  --color-slate-900: #190a0f; /* Crimson night panels */
+  --color-slate-850: #231015; /* Plum wine sub-panels */
+  --color-slate-800: #33171e; /* Rosé blush border lines */
+  --color-slate-700: #491f2a; /* Deep berry dividers */
+  --color-slate-650: #662d3a; /* Sunset haze markers */
+  --color-slate-600: #fda4af; /* Rosewater text helpers */
+  --color-slate-500: #fecdd3; /* Soft blossom descriptions */
+  --color-slate-400: #ffe4e6; /* Luminous pink subheaders */
+  --color-slate-300: #fff1f2; /* Peach cream headings */
+  --color-slate-200: #fff5f5; /* Clean light silk reading text */
+  --color-slate-100: #ffffff; /* Bright petal glare */
+  --color-slate-50: #ffffff;
+  
+  --color-indigo-950: #9d174d;
+  --color-indigo-900: #831843;
+  --color-indigo-500: #f43f5e;
+  --color-indigo-400: #fb7185;
+  --color-indigo-600: #e11d48;
+  --color-blue-500: #db2777;
+  --color-blue-600: #be185d;
+
+  color-scheme: dark;
+  background-color: #100609 !important;
+  color: #fecdd3 !important;
+}
+
 
