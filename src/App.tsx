@@ -21,7 +21,7 @@ import {
   BookOpen, Sparkles, MessageSquare, Send, Brain, Wrench, Paperclip, Upload, Copy, Check, FileCode, ImageIcon
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
-import { format, subDays, differenceInMinutes, parseISO as dateFnsParseISO, startOfDay, endOfDay, addDays } from 'date-fns';
+import { format, subDays, differenceInMinutes, parseISO as dateFnsParseISO, startOfDay, endOfDay, addDays, subMonths, subQuarters, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter } from 'date-fns';
 import { SupportTask, SupportLevel, Priority, TaskStatus, PRIORITY_COLORS, STATUS_COLORS, ProjectConfig, AppUser } from './types';
 import { cn, formatDuration, downloadCSV, exportToExcel, exportToPDF } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -992,6 +992,8 @@ Signatures Registered:
         warJarName: 'hr-portal-v2.4.1.war',
         purpose: 'v2.4.1 Production Rollout - Payroll Module Enhancements',
         deploymentDate: '2026-05-20T14:30:00Z',
+        intimationDate: '2026-05-20T13:30:00Z',
+        sanityCheckDate: '2026-05-20T15:00:00Z',
         status: 'Successful',
         hasDeploymentSignoff: true,
         hasUatSignoff: true,
@@ -1008,6 +1010,8 @@ Signatures Registered:
         warJarName: 'payment-gateway-v1.9.0.jar',
         purpose: 'v1.9.0 Payment Gateway Update - Secure 3D-Secure integration',
         deploymentDate: '2026-05-29T21:00:00Z',
+        intimationDate: '2026-05-29T20:00:00Z',
+        sanityCheckDate: '2026-05-29T21:30:00Z',
         status: 'Scheduled',
         hasDeploymentSignoff: true,
         hasUatSignoff: true,
@@ -1024,6 +1028,8 @@ Signatures Registered:
         warJarName: 'crm-backend-v3.1.2.jar',
         purpose: 'v3.1.2 DB Migration - Customer interactions schema updates',
         deploymentDate: '2026-05-18T08:00:00Z',
+        intimationDate: '2026-05-18T07:00:00Z',
+        sanityCheckDate: '2026-05-18T08:30:00Z',
         status: 'Rolled Back',
         hasDeploymentSignoff: true,
         hasUatSignoff: false,
@@ -1040,6 +1046,8 @@ Signatures Registered:
         warJarName: 'hr-portal-v2.4.0.war',
         purpose: 'v2.4.0 Production Rollout - Notification Engine Overhaul',
         deploymentDate: '2026-05-15T11:00:00Z',
+        intimationDate: '2026-05-15T10:00:00Z',
+        sanityCheckDate: '2026-05-15T11:30:00Z',
         status: 'Successful',
         hasDeploymentSignoff: true,
         hasUatSignoff: true,
@@ -1060,6 +1068,8 @@ Signatures Registered:
         warJarName: 'mobile-android-v1.2.0.apk',
         purpose: 'v1.2.0 Android Store Release - Theme adjustments & biometrics login support',
         deploymentDate: '2026-05-10T09:15:00Z',
+        intimationDate: '2026-05-10T08:15:00Z',
+        sanityCheckDate: '2026-05-10T10:00:00Z',
         status: 'Successful',
         hasDeploymentSignoff: true,
         hasUatSignoff: true,
@@ -1080,6 +1090,8 @@ Signatures Registered:
         warJarName: 'recs-engine-v0.8.2.jar',
         purpose: 'v0.8.2 Recommendation Engine - Hotfix for memory leakage on model load',
         deploymentDate: '2026-05-04T16:45:00Z',
+        intimationDate: '2026-05-04T15:45:00Z',
+        sanityCheckDate: '2026-05-04T17:30:00Z',
         status: 'Successful',
         hasDeploymentSignoff: true,
         hasUatSignoff: true,
@@ -1100,6 +1112,8 @@ Signatures Registered:
         warJarName: 'crm-scheduler-v1.1.0-beta.jar',
         purpose: 'v1.1.0 Internal CRM Scheduler Deployment - High priority ticket assignment automated workflow',
         deploymentDate: '2026-05-01T15:00:00Z',
+        intimationDate: '2026-05-01T14:00:00Z',
+        sanityCheckDate: '2026-05-01T15:30:00Z',
         status: 'Failed',
         hasDeploymentSignoff: false,
         hasUatSignoff: true,
@@ -1144,12 +1158,22 @@ Signatures Registered:
   const [crFormLeadName, setCrFormLeadName] = useState('');
   const [crFormSanityStatus, setCrFormSanityStatus] = useState<string>('Pass');
   const [crFormRca, setCrFormRca] = useState('');
+  const [crFormIntimationDate, setCrFormIntimationDate] = useState('');
+  const [crFormSanityCheckDate, setCrFormSanityCheckDate] = useState('');
 
   // Filtering for Change & Release
   const [crFilterProject, setCrFilterProject] = useState('All');
   const [crFilterStatus, setCrFilterStatus] = useState('All');
   const [crSearchQuery, setCrSearchQuery] = useState('');
-  const [crDashboardPeriod, setCrDashboardPeriod] = useState<'daily' | 'weekly' | 'biweekly'>('daily');
+  const [crDashboardPeriod, setCrDashboardPeriod] = useState<'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'custom'>('daily');
+  const [crCustomStartDate, setCrCustomStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().substring(0, 10);
+  });
+  const [crCustomEndDate, setCrCustomEndDate] = useState<string>(() => {
+    return new Date().toISOString().substring(0, 10);
+  });
 
   // Knowledge Base States
   const [kbSearchQuery, setKbSearchQuery] = useState('');
@@ -2197,6 +2221,9 @@ Signatures Registered:
     setCrFormWarJarName('');
     setCrFormPurpose('');
     setCrFormDeploymentDate(new Date().toISOString().substring(0, 16)); // YYYY-MM-DDTHH:MM
+    // Set intimation date to slightly earlier than execution by default
+    setCrFormIntimationDate(new Date(Date.now() - 3600000).toISOString().substring(0, 16)); 
+    setCrFormSanityCheckDate(new Date().toISOString().substring(0, 16));
     setCrFormStatus('Scheduled');
     setCrFormHasDeploymentSignoff(false);
     setCrFormHasUatSignoff(false);
@@ -2219,6 +2246,7 @@ Signatures Registered:
     setEditingReleaseRecord(rec);
     setCrFormWarJarName(rec.warJarName || '');
     setCrFormPurpose(rec.purpose || '');
+    
     let dateStr = '';
     try {
       if (rec.deploymentDate) {
@@ -2228,6 +2256,31 @@ Signatures Registered:
       dateStr = new Date().toISOString().substring(0, 16);
     }
     setCrFormDeploymentDate(dateStr || new Date().toISOString().substring(0, 16));
+
+    let intimDateStr = '';
+    try {
+      if (rec.intimationDate) {
+        intimDateStr = new Date(rec.intimationDate).toISOString().substring(0, 16);
+      } else {
+        intimDateStr = new Date(new Date(rec.deploymentDate || Date.now()).getTime() - 3600000).toISOString().substring(0, 16);
+      }
+    } catch(e) {
+      intimDateStr = new Date().toISOString().substring(0, 16);
+    }
+    setCrFormIntimationDate(intimDateStr);
+
+    let sanityDateStr = '';
+    try {
+      if (rec.sanityCheckDate) {
+        sanityDateStr = new Date(rec.sanityCheckDate).toISOString().substring(0, 16);
+      } else {
+        sanityDateStr = new Date(rec.deploymentDate || Date.now()).toISOString().substring(0, 16);
+      }
+    } catch(e) {
+      sanityDateStr = new Date().toISOString().substring(0, 16);
+    }
+    setCrFormSanityCheckDate(sanityDateStr);
+
     setCrFormStatus(rec.status || 'Scheduled');
     setCrFormHasDeploymentSignoff(!!rec.hasDeploymentSignoff);
     setCrFormHasUatSignoff(!!rec.hasUatSignoff);
@@ -2258,6 +2311,9 @@ Signatures Registered:
     const currentEmpName = currentLoggedInUserObj?.name || currentUser || 'Admin';
     const list = PROJECTS_LIST.length > 0 ? PROJECTS_LIST : ['HR-Portal', 'E-Commerce', 'Internal-CRM', 'Mobile-App'];
 
+    const intimationIso = crFormIntimationDate ? new Date(crFormIntimationDate).toISOString() : new Date().toISOString();
+    const sanityCheckIso = crFormSanityCheckDate ? new Date(crFormSanityCheckDate).toISOString() : new Date().toISOString();
+
     if (editingReleaseRecord) {
       // Update
       setChangeReleaseRecords(prev => prev.map(r => {
@@ -2267,6 +2323,8 @@ Signatures Registered:
             warJarName: crFormWarJarName.trim(),
             purpose: crFormPurpose.trim(),
             deploymentDate: new Date(crFormDeploymentDate).toISOString(),
+            intimationDate: intimationIso,
+            sanityCheckDate: sanityCheckIso,
             status: crFormStatus,
             hasDeploymentSignoff: crFormHasDeploymentSignoff,
             hasUatSignoff: crFormHasUatSignoff,
@@ -2298,6 +2356,8 @@ Signatures Registered:
         warJarName: crFormWarJarName.trim(),
         purpose: crFormPurpose.trim(),
         deploymentDate: new Date(crFormDeploymentDate).toISOString(),
+        intimationDate: intimationIso,
+        sanityCheckDate: sanityCheckIso,
         status: crFormStatus,
         hasDeploymentSignoff: crFormHasDeploymentSignoff,
         hasUatSignoff: crFormHasUatSignoff,
@@ -2384,7 +2444,7 @@ Signatures Registered:
     };
   }, [changeReleaseRecords, selectedProject, crFilterProject, selectedEmployee]);
 
-  // Dynamic grouping of release records for Daily, Weekly, and Bi-weekly dashboard analytics
+  // Dynamic grouping of release records for Daily, Weekly, Bi-weekly, Monthly, Quarterly, and Custom user-defined analytics
   const crTrendData = useMemo(() => {
     const baseRecords = changeReleaseRecords.filter(rec => {
       const matchGlobalProject = selectedProject === 'All' || rec.projectId === selectedProject;
@@ -2393,7 +2453,7 @@ Signatures Registered:
       return matchGlobalProject && matchLocalProject && matchEmployee;
     });
 
-    const refDate = new Date('2026-05-27T00:00:00Z'); // Baseline anchored to user's current sandbox time
+    const refDate = new Date('2026-05-27T00:00:00Z'); // Baseline anchored to user's sandbox current time
 
     if (crDashboardPeriod === 'daily') {
       const days = [];
@@ -2469,7 +2529,7 @@ Signatures Registered:
         }
       });
       return weeks;
-    } else {
+    } else if (crDashboardPeriod === 'biweekly') {
       const biweeks = [];
       for (let i = 4; i >= 0; i--) {
         const startOfBi = subDays(refDate, i * 14 + 13);
@@ -2507,32 +2567,175 @@ Signatures Registered:
         }
       });
       return biweeks;
+    } else if (crDashboardPeriod === 'monthly') {
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const mDate = subMonths(refDate, i);
+        months.push({
+          start: startOfMonth(mDate),
+          end: endOfMonth(mDate),
+          label: format(mDate, 'MMM yyyy'),
+          Successful: 0,
+          FailedDone: 0,
+          Scheduled: 0,
+          InProgress: 0,
+          Total: 0
+        });
+      }
+
+      baseRecords.forEach(rec => {
+        try {
+          const recDate = new Date(rec.deploymentDate);
+          const bucket = months.find(m => recDate >= m.start && recDate <= endOfDay(m.end));
+          if (bucket) {
+            bucket.Total++;
+            if (rec.status === 'Successful') {
+              bucket.Successful++;
+            } else if (rec.status === 'Failed' || rec.status === 'Rolled Back') {
+              bucket.FailedDone++;
+            } else if (rec.status === 'Scheduled') {
+              bucket.Scheduled++;
+            } else if (rec.status === 'In Progress') {
+              bucket.InProgress++;
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+      return months;
+    } else if (crDashboardPeriod === 'quarterly') {
+      const quarters = [];
+      for (let i = 3; i >= 0; i--) {
+        const qDate = subQuarters(refDate, i);
+        const qNum = Math.floor(qDate.getMonth() / 3) + 1;
+        quarters.push({
+          start: startOfQuarter(qDate),
+          end: endOfQuarter(qDate),
+          label: `Q${qNum} ${qDate.getFullYear()}`,
+          Successful: 0,
+          FailedDone: 0,
+          Scheduled: 0,
+          InProgress: 0,
+          Total: 0
+        });
+      }
+
+      baseRecords.forEach(rec => {
+        try {
+          const recDate = new Date(rec.deploymentDate);
+          const bucket = quarters.find(q => recDate >= q.start && recDate <= endOfDay(q.end));
+          if (bucket) {
+            bucket.Total++;
+            if (rec.status === 'Successful') {
+              bucket.Successful++;
+            } else if (rec.status === 'Failed' || rec.status === 'Rolled Back') {
+              bucket.FailedDone++;
+            } else if (rec.status === 'Scheduled') {
+              bucket.Scheduled++;
+            } else if (rec.status === 'In Progress') {
+              bucket.InProgress++;
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+      return quarters;
+    } else {
+      // 'custom' selection
+      const start = startOfDay(new Date(crCustomStartDate || '2026-05-01'));
+      const end = endOfDay(new Date(crCustomEndDate || '2026-05-31'));
+      
+      const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      const chunkCount = 5;
+      const chunks = [];
+      const daysPerChunk = Math.ceil(totalDays / chunkCount);
+      
+      for (let i = 0; i < chunkCount; i++) {
+        const chunkStart = addDays(start, i * daysPerChunk);
+        let chunkEnd = addDays(start, (i + 1) * daysPerChunk - 1);
+        if (chunkEnd > end) chunkEnd = end;
+        
+        if (chunkStart <= end) {
+          chunks.push({
+            start: chunkStart,
+            end: chunkEnd,
+            label: `${format(chunkStart, 'MMM dd')} - ${format(chunkEnd, 'MMM dd')}`,
+            Successful: 0,
+            FailedDone: 0,
+            Scheduled: 0,
+            InProgress: 0,
+            Total: 0
+          });
+        }
+      }
+
+      baseRecords.forEach(rec => {
+        try {
+          const recDate = new Date(rec.deploymentDate);
+          const bucket = chunks.find(ch => recDate >= ch.start && recDate <= endOfDay(ch.end));
+          if (bucket) {
+            bucket.Total++;
+            if (rec.status === 'Successful') {
+              bucket.Successful++;
+            } else if (rec.status === 'Failed' || rec.status === 'Rolled Back') {
+              bucket.FailedDone++;
+            } else if (rec.status === 'Scheduled') {
+              bucket.Scheduled++;
+            } else if (rec.status === 'In Progress') {
+              bucket.InProgress++;
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+      return chunks;
     }
-  }, [changeReleaseRecords, crDashboardPeriod, selectedProject, crFilterProject, selectedEmployee]);
+  }, [changeReleaseRecords, crDashboardPeriod, crCustomStartDate, crCustomEndDate, selectedProject, crFilterProject, selectedEmployee]);
 
   // Robust function for exporting the registry to Excel format
   const handleExportToExcel = () => {
-    const dataToExport = filteredChangeReleases.map(rec => ({
-      'Record ID': rec.id,
-      'Project ID': rec.projectId,
-      'Deployment Target Date': rec.deploymentDate,
-      'Package Artifact (WAR/JAR)': rec.warJarName,
-      'Change Purpose / Ref ID': rec.purpose,
-      'Status': rec.status,
-      'POD Name': rec.podName || 'N/A',
-      'Team Name': rec.teamName || 'N/A',
-      'Lead Name': rec.leadName || 'N/A',
-      'Sanity Check Status': rec.sanityStatus || 'Pass',
-      'RCA Details': rec.rcaVal || 'N/A',
-      'UAT Met Sign-off': rec.hasUatSignoff ? 'PASSED' : 'PENDING',
-      'Deployment Met Sign-off': rec.hasDeploymentSignoff ? 'PASSED' : 'PENDING',
-      'Doc Review Met Sign-off': rec.hasDocReviewSignoff ? 'PASSED' : 'PENDING',
-      'Was Rolled Back': rec.rollbackDone ? 'Yes' : 'No',
-      'Rollback Reason': rec.failureReason || 'N/A',
-      'Retrospective Lessons Learned': rec.lessonsLearned || 'N/A',
-      'Additional Notes': rec.notes || 'N/A',
-      'Registered Employee': rec.registeredBy || 'N/A',
-    }));
+    const dataToExport = filteredChangeReleases.map(rec => {
+      let dispIntimationDate = 'N/A';
+      try {
+        if (rec.intimationDate) {
+          dispIntimationDate = format(new Date(rec.intimationDate), 'yyyy-MM-dd HH:mm');
+        }
+      } catch (e) {}
+
+      let dispSanityDate = 'N/A';
+      try {
+        if (rec.sanityCheckDate) {
+          dispSanityDate = format(new Date(rec.sanityCheckDate), 'yyyy-MM-dd HH:mm');
+        }
+      } catch (e) {}
+
+      return {
+        'Record ID': rec.id,
+        'Project ID': rec.projectId,
+        'Deployment Intimation Date': dispIntimationDate,
+        'Deployment Target Date': rec.deploymentDate,
+        'Package Artifact (WAR/JAR)': rec.warJarName,
+        'Change Purpose / Ref ID': rec.purpose,
+        'Status': rec.status,
+        'POD Name': rec.podName || 'N/A',
+        'Team Name': rec.teamName || 'N/A',
+        'Lead Name': rec.leadName || 'N/A',
+        'Sanity Check Date': dispSanityDate,
+        'Sanity Check Status': rec.sanityStatus || 'Pass',
+        'RCA Details': rec.rcaVal || 'N/A',
+        'UAT Met Sign-off': rec.hasUatSignoff ? 'PASSED' : 'PENDING',
+        'Deployment Met Sign-off': rec.hasDeploymentSignoff ? 'PASSED' : 'PENDING',
+        'Doc Review Met Sign-off': rec.hasDocReviewSignoff ? 'PASSED' : 'PENDING',
+        'Was Rolled Back': rec.rollbackDone ? 'Yes' : 'No',
+        'Rollback Reason': rec.failureReason || 'N/A',
+        'Retrospective Lessons Learned': rec.lessonsLearned || 'N/A',
+        'Additional Notes': rec.notes || 'N/A',
+        'Registered Employee': rec.registeredBy || 'N/A',
+      };
+    });
 
     exportToExcel([{ name: 'Change & Release Records', data: dataToExport }], 'Change_Release_Registry.xlsx');
   };
@@ -7978,41 +8181,100 @@ Guidelines:
                       </p>
                     </div>
 
-                    {/* Daily, Weekly, Bi-weekly selectors */}
-                    <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
-                      <button
-                        onClick={() => setCrDashboardPeriod('daily')}
-                        className={cn(
-                          "px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
-                          crDashboardPeriod === 'daily'
-                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
-                            : "text-slate-400 hover:text-white"
-                        )}
-                      >
-                        Daily
-                      </button>
-                      <button
-                        onClick={() => setCrDashboardPeriod('weekly')}
-                        className={cn(
-                          "px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
-                          crDashboardPeriod === 'weekly'
-                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
-                            : "text-slate-400 hover:text-white"
-                        )}
-                      >
-                        Weekly
-                      </button>
-                      <button
-                        onClick={() => setCrDashboardPeriod('biweekly')}
-                        className={cn(
-                          "px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
-                          crDashboardPeriod === 'biweekly'
-                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
-                            : "text-slate-400 hover:text-white"
-                        )}
-                      >
-                        Bi-Weekly
-                      </button>
+                    {/* Dynamic selectors for Daily, Weekly, Bi-weekly, Monthly, Quarterly, and Custom ranges */}
+                    <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-3">
+                      {crDashboardPeriod === 'custom' && (
+                        <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                          <div className="flex items-center gap-1.5 px-2">
+                            <span className="text-[9px] text-slate-500 uppercase font-black">From:</span>
+                            <input
+                              type="date"
+                              value={crCustomStartDate}
+                              onChange={e => setCrCustomStartDate(e.target.value)}
+                              className="bg-transparent text-[11px] font-bold text-white border-none outline-none p-0 focus:ring-0 cursor-pointer w-[110px]"
+                            />
+                          </div>
+                          <div className="h-4 w-px bg-slate-800" />
+                          <div className="flex items-center gap-1.5 px-2">
+                            <span className="text-[9px] text-slate-500 uppercase font-black">To:</span>
+                            <input
+                              type="date"
+                              value={crCustomEndDate}
+                              onChange={e => setCrCustomEndDate(e.target.value)}
+                              className="bg-transparent text-[11px] font-bold text-white border-none outline-none p-0 focus:ring-0 cursor-pointer w-[110px]"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 flex-wrap gap-1">
+                        <button
+                          onClick={() => setCrDashboardPeriod('daily')}
+                          className={cn(
+                            "px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                            crDashboardPeriod === 'daily'
+                              ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+                              : "text-slate-400 hover:text-white"
+                          )}
+                        >
+                          Daily
+                        </button>
+                        <button
+                          onClick={() => setCrDashboardPeriod('weekly')}
+                          className={cn(
+                            "px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                            crDashboardPeriod === 'weekly'
+                              ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+                              : "text-slate-400 hover:text-white"
+                          )}
+                        >
+                          Weekly
+                        </button>
+                        <button
+                          onClick={() => setCrDashboardPeriod('biweekly')}
+                          className={cn(
+                            "px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                            crDashboardPeriod === 'biweekly'
+                              ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+                              : "text-slate-400 hover:text-white"
+                          )}
+                        >
+                          Bi-Weekly
+                        </button>
+                        <button
+                          onClick={() => setCrDashboardPeriod('monthly')}
+                          className={cn(
+                            "px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                            crDashboardPeriod === 'monthly'
+                              ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+                              : "text-slate-400 hover:text-white"
+                          )}
+                        >
+                          Monthly
+                        </button>
+                        <button
+                          onClick={() => setCrDashboardPeriod('quarterly')}
+                          className={cn(
+                            "px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                            crDashboardPeriod === 'quarterly'
+                              ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+                              : "text-slate-400 hover:text-white"
+                          )}
+                        >
+                          Quarterly
+                        </button>
+                        <button
+                          onClick={() => setCrDashboardPeriod('custom')}
+                          className={cn(
+                            "px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                            crDashboardPeriod === 'custom'
+                              ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+                              : "text-slate-400 hover:text-white"
+                          )}
+                        >
+                          Custom Field
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -8286,6 +8548,20 @@ Guidelines:
 
                             {/* Meta field: Date, Registered By, POD, Team, Lead */}
                             <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 border-t border-slate-800/50 mt-3 text-[10px] font-sans text-slate-400 select-none">
+                              {rec.intimationDate && (
+                                <span className="flex items-center gap-1.5 font-sans">
+                                  <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                  <strong className="text-indigo-400 uppercase font-black">Intimation date:</strong> <span className="text-indigo-300 font-bold">
+                                    {(() => {
+                                      try {
+                                        return format(new Date(rec.intimationDate), 'PPP p');
+                                      } catch (e) {
+                                        return rec.intimationDate;
+                                      }
+                                    })()}
+                                  </span>
+                                </span>
+                              )}
                               <span className="flex items-center gap-1.5 font-sans">
                                 <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                                 <strong className="text-slate-500 uppercase font-black">Target Deployment:</strong> {formattedDate()}
@@ -8366,6 +8642,21 @@ Guidelines:
                             <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block border-b border-slate-850 pb-1.5 pt-2 mb-1 text-center font-sans font-bold">
                               Sanity & Stabilization Check
                             </span>
+
+                            {rec.sanityCheckDate && (
+                              <div className="flex items-center justify-between text-[11px] font-sans pb-1.5">
+                                <span className="text-slate-400 font-semibold">Checked At</span>
+                                <span className="text-slate-300 font-black font-mono">
+                                  {(() => {
+                                    try {
+                                      return format(new Date(rec.sanityCheckDate), 'MMM dd, HH:mm');
+                                    } catch (e) {
+                                      return 'N/A';
+                                    }
+                                  })()}
+                                </span>
+                              </div>
+                            )}
 
                             <div className="flex items-center justify-between text-[11px] font-sans">
                               <span className="text-slate-400 font-semibold">Deployment Status</span>
@@ -8584,14 +8875,26 @@ Guidelines:
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Deployment Intimation date */}
+                      <div>
+                        <label className="label-sm">Deployment Intimation Date *</label>
+                        <input
+                          type="datetime-local"
+                          required
+                          className="input-field text-xs text-slate-100"
+                          value={crFormIntimationDate}
+                          onChange={e => setCrFormIntimationDate(e.target.value)}
+                        />
+                      </div>
+
                       {/* Target deployment Date/Time */}
                       <div>
                         <label className="label-sm">Deployment Execution Date/Time *</label>
                         <input
                           type="datetime-local"
                           required
-                          className="input-field text-xs"
+                          className="input-field text-xs text-slate-100"
                           value={crFormDeploymentDate}
                           onChange={e => setCrFormDeploymentDate(e.target.value)}
                         />
@@ -8665,32 +8968,45 @@ Guidelines:
                         Sanity and Stabilization Check
                       </span>
 
-                      <div className="space-y-2 text-left">
-                        <label className="label-sm block">Deployment Status *</label>
-                        <div className="flex items-center gap-6">
-                          <label className="flex items-center gap-2 cursor-pointer select-none">
-                            <input
-                              type="radio"
-                              name="sanityStatus"
-                              value="Pass"
-                              checked={crFormSanityStatus === 'Pass'}
-                              onChange={() => setCrFormSanityStatus('Pass')}
-                              className="w-4 h-4 text-emerald-500 bg-slate-850 border-slate-800 focus:ring-emerald-500/20"
-                            />
-                            <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Pass</span>
-                          </label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                        <div>
+                          <label className="label-sm">Sanity & Stabilization Check Date *</label>
+                          <input
+                            type="datetime-local"
+                            required
+                            className="input-field text-xs text-slate-100"
+                            value={crFormSanityCheckDate}
+                            onChange={e => setCrFormSanityCheckDate(e.target.value)}
+                          />
+                        </div>
 
-                          <label className="flex items-center gap-2 cursor-pointer select-none">
-                            <input
-                              type="radio"
-                              name="sanityStatus"
-                              value="Fail"
-                              checked={crFormSanityStatus === 'Fail'}
-                              onChange={() => setCrFormSanityStatus('Fail')}
-                              className="w-4 h-4 text-rose-500 bg-slate-850 border-slate-800 focus:ring-rose-500/20"
-                            />
-                            <span className="text-xs font-black uppercase tracking-wider text-rose-400">Fail</span>
-                          </label>
+                        <div>
+                          <label className="label-sm block mb-1">Deployment Status *</label>
+                          <div className="flex items-center gap-6 pt-2">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                type="radio"
+                                name="sanityStatus"
+                                value="Pass"
+                                checked={crFormSanityStatus === 'Pass'}
+                                onChange={() => setCrFormSanityStatus('Pass')}
+                                className="w-4 h-4 text-emerald-500 bg-slate-850 border-slate-800 focus:ring-emerald-500/20"
+                              />
+                              <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Pass</span>
+                            </label>
+
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                type="radio"
+                                name="sanityStatus"
+                                value="Fail"
+                                checked={crFormSanityStatus === 'Fail'}
+                                onChange={() => setCrFormSanityStatus('Fail')}
+                                className="w-4 h-4 text-rose-500 bg-slate-850 border-slate-800 focus:ring-rose-500/20"
+                              />
+                              <span className="text-xs font-black uppercase tracking-wider text-rose-400">Fail</span>
+                            </label>
+                          </div>
                         </div>
                       </div>
 
