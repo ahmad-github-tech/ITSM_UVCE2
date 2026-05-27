@@ -18,7 +18,7 @@ import {
   Search, Download, Trash2, LayoutDashboard, ListTodo, Filter, ChevronRight, ChevronLeft, ArrowUpDown, Settings, Save,
   Pencil, RotateCcw, AlertTriangle, Info, ShieldAlert, UserPlus, Users, Key,
   History, Eye, Scale, Terminal, Calendar, ChevronDown, FileSpreadsheet, FileText, X, Palette,
-  BookOpen, Sparkles, MessageSquare, Send, Brain
+  BookOpen, Sparkles, MessageSquare, Send, Brain, Wrench
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import { format, subDays, differenceInMinutes, parseISO as dateFnsParseISO, startOfDay, endOfDay, addDays } from 'date-fns';
@@ -837,6 +837,7 @@ export default function App() {
   const [editingTask, setEditingTask] = useState<SupportTask | null>(null);
   const [auditTask, setAuditTask] = useState<SupportTask | null>(null);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+  const [isUtilityDropdownOpen, setIsUtilityDropdownOpen] = useState(false);
   const [analyticsSubView, setAnalyticsSubView] = useState<'system' | 'productivity'>('system');
   const [prodSelectedRes, setProdSelectedRes] = useState<string>('All');
 
@@ -2777,13 +2778,6 @@ Guidelines:
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black">Portal Access Key</label>
-                      <button 
-                        type="button" 
-                        onClick={() => setAuthMode('recover')}
-                        className="text-[9px] text-blue-500 hover:text-blue-400 font-black uppercase tracking-wide transition-all"
-                      >
-                        Recovery Option
-                      </button>
                     </div>
                     <input 
                       type="password" 
@@ -2914,54 +2908,6 @@ Guidelines:
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Bottom Security Audit Histories */}
-          <div className="mt-8 border-t border-slate-800 pt-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-slate-500" />
-                <h3 className="text-[10px] font-black text-white uppercase tracking-widest leading-none">Live Access Records</h3>
-              </div>
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider leading-none">Last 3 Attempts</p>
-            </div>
-
-            <div className="space-y-2.5">
-              {loginHistories.length === 0 ? (
-                <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/60 text-center">
-                  <p className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">No historic entry records registered. Database active.</p>
-                </div>
-              ) : (
-                loginHistories.slice(0, 3).map((hist: any, ix: number) => (
-                  <motion.div 
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: ix * 0.1 }}
-                    key={hist.id || ix} 
-                    className="p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl flex items-center justify-between gap-3 font-sans"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-white font-black uppercase">{hist.userId}</span>
-                        <span className="text-[9px] text-slate-500 font-bold">({hist.name || 'Staff'})</span>
-                      </div>
-                      <p className="text-[8px] text-slate-550 font-mono tracking-tight leading-none text-slate-500">
-                        {hist.loginTime ? format(parseISO(hist.loginTime), 'LLL d, yyyy HH:mm:ss') : 'Recently'}
-                      </p>
-                    </div>
-
-                    <span className={cn(
-                      "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider",
-                      hist.status?.toLowerCase().includes('success') 
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
-                        : "bg-red-500/10 text-red-400 border border-red-500/20"
-                    )}>
-                      {hist.status || 'Success'}
-                    </span>
-                  </motion.div>
-                ))
-              )}
-            </div>
           </div>
         </div>
 
@@ -3789,19 +3735,62 @@ Guidelines:
                 <ListTodo className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                 <span className="hidden md:inline">My Workbook</span>
               </button>
-              <button 
-                onClick={() => {
-                  setActiveTab('knowledge-base' as any);
-                  setKbSelectedArticle(null);
-                }}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap animate-pulse-subtle",
-                  (activeTab as string) === 'knowledge-base' ? "bg-slate-800 text-white shadow-lg shadow-black/20" : "text-slate-500 hover:text-slate-300"
-                )}
-              >
-                <BookOpen className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                <span className="hidden md:inline">Knowledge Base</span>
-              </button>
+
+              <div className="relative">
+                <button 
+                  onClick={() => setIsUtilityDropdownOpen(!isUtilityDropdownOpen)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
+                    (activeTab as string) === 'knowledge-base' ? "bg-slate-800 text-white shadow-lg shadow-black/20" : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/40"
+                  )}
+                >
+                  <Wrench className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <span className="hidden md:inline">Utility</span>
+                  <ChevronDown className={cn("w-3 h-3 transition-transform duration-200 ml-0.5 shrink-0", isUtilityDropdownOpen && "rotate-180")} />
+                </button>
+
+                <AnimatePresence>
+                  {isUtilityDropdownOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setIsUtilityDropdownOpen(false)}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute left-0 mt-2 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden"
+                      >
+                        <div className="px-3 py-2 border-b border-slate-800 bg-slate-950/40">
+                          <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Helper Utilities</span>
+                        </div>
+                        <div className="p-1">
+                          <button
+                            onClick={() => {
+                              setActiveTab('knowledge-base' as any);
+                              setKbSelectedArticle(null);
+                              setIsUtilityDropdownOpen(false);
+                            }}
+                            className={cn(
+                              "w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800 rounded-md text-slate-300 hover:text-white transition-colors text-xs font-bold text-left cursor-pointer",
+                              (activeTab as string) === 'knowledge-base' && "bg-slate-850 text-white shadow"
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              <BookOpen className="w-3.5 h-3.5 text-sky-450 shrink-0" />
+                              <span>Knowledge Base</span>
+                            </div>
+                            {(activeTab as string) === 'knowledge-base' && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                            )}
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
               {isManagerOrAdmin && (
                 <button 
                   onClick={() => setActiveTab('settings')}
