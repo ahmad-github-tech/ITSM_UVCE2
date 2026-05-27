@@ -1034,6 +1034,87 @@ Signatures Registered:
         projectId: 'Internal-CRM',
         registeredBy: 'Admin',
         notes: 'Rollback script completed successfully within 9 minutes. User sessions restored automatically.'
+      },
+      {
+        id: 'CR-1004',
+        warJarName: 'hr-portal-v2.4.0.war',
+        purpose: 'v2.4.0 Production Rollout - Notification Engine Overhaul',
+        deploymentDate: '2026-05-15T11:00:00Z',
+        status: 'Successful',
+        hasDeploymentSignoff: true,
+        hasUatSignoff: true,
+        hasDocReviewSignoff: true,
+        rollbackDone: false,
+        failureReason: '',
+        lessonsLearned: 'Completed staging tests 48 hrs in advance.',
+        projectId: 'HR-Portal',
+        registeredBy: 'Admin',
+        notes: 'Rolled out and warm-started background service cleanly.',
+        podName: 'POD-Alpha',
+        teamName: 'Core HR Engineering',
+        leadName: 'Rajesh Kumar',
+        sanityStatus: 'Pass'
+      },
+      {
+        id: 'CR-1005',
+        warJarName: 'mobile-android-v1.2.0.apk',
+        purpose: 'v1.2.0 Android Store Release - Theme adjustments & biometrics login support',
+        deploymentDate: '2026-05-10T09:15:00Z',
+        status: 'Successful',
+        hasDeploymentSignoff: true,
+        hasUatSignoff: true,
+        hasDocReviewSignoff: true,
+        rollbackDone: false,
+        failureReason: '',
+        lessonsLearned: 'Play Store staggered rollout allowed quick validation.',
+        projectId: 'Mobile-App',
+        registeredBy: 'Rajesh Kumar',
+        notes: 'A/B test indicates 99.4% crash free rate.',
+        podName: 'POD-Mobile',
+        teamName: 'Mobile UI Team',
+        leadName: 'Rajesh Kumar',
+        sanityStatus: 'Pass'
+      },
+      {
+        id: 'CR-1006',
+        warJarName: 'recs-engine-v0.8.2.jar',
+        purpose: 'v0.8.2 Recommendation Engine - Hotfix for memory leakage on model load',
+        deploymentDate: '2026-05-04T16:45:00Z',
+        status: 'Successful',
+        hasDeploymentSignoff: true,
+        hasUatSignoff: true,
+        hasDocReviewSignoff: true,
+        rollbackDone: false,
+        failureReason: '',
+        lessonsLearned: 'Memory profile checks should be run on CI/CD pipelines automatically.',
+        projectId: 'E-Commerce',
+        registeredBy: 'Admin',
+        notes: 'Heap utilization went down from 8.8GB to 1.1GB.',
+        podName: 'POD-Commerce',
+        teamName: 'Search & Recs',
+        leadName: 'Rajesh Kumar',
+        sanityStatus: 'Pass'
+      },
+      {
+        id: 'CR-1007',
+        warJarName: 'crm-scheduler-v1.1.0-beta.jar',
+        purpose: 'v1.1.0 Internal CRM Scheduler Deployment - High priority ticket assignment automated workflow',
+        deploymentDate: '2026-05-01T15:00:00Z',
+        status: 'Failed',
+        hasDeploymentSignoff: false,
+        hasUatSignoff: true,
+        hasDocReviewSignoff: true,
+        rollbackDone: true,
+        failureReason: 'Null pointer exception during initialization of Kafka integration client.',
+        lessonsLearned: 'Never deploy beta packages without checking staging broker topology endpoints.',
+        projectId: 'Internal-CRM',
+        registeredBy: 'Rajesh Kumar',
+        notes: 'Clean rollback triggered.',
+        podName: 'POD-Scheduler',
+        teamName: 'Core Integrations',
+        leadName: 'Rajesh Kumar',
+        sanityStatus: 'Fail',
+        rcaVal: 'Staging environment loaded a production kafka broker configuration which led to permission check block.'
       }
     ];
   });
@@ -1058,11 +1139,17 @@ Signatures Registered:
   const [crFormLessonsLearned, setCrFormLessonsLearned] = useState('');
   const [crFormProjectId, setCrFormProjectId] = useState('HR-Portal');
   const [crFormNotes, setCrFormNotes] = useState('');
+  const [crFormPodName, setCrFormPodName] = useState('');
+  const [crFormTeamName, setCrFormTeamName] = useState('');
+  const [crFormLeadName, setCrFormLeadName] = useState('');
+  const [crFormSanityStatus, setCrFormSanityStatus] = useState<string>('Pass');
+  const [crFormRca, setCrFormRca] = useState('');
 
   // Filtering for Change & Release
   const [crFilterProject, setCrFilterProject] = useState('All');
   const [crFilterStatus, setCrFilterStatus] = useState('All');
   const [crSearchQuery, setCrSearchQuery] = useState('');
+  const [crDashboardPeriod, setCrDashboardPeriod] = useState<'daily' | 'weekly' | 'biweekly'>('daily');
 
   // Knowledge Base States
   const [kbSearchQuery, setKbSearchQuery] = useState('');
@@ -2117,8 +2204,13 @@ Signatures Registered:
     setCrFormRollbackDone(false);
     setCrFormFailureReason('');
     setCrFormLessonsLearned('');
-    setCrFormProjectId(list[0]);
+    setCrFormProjectId(selectedProject !== 'All' ? selectedProject : list[0]);
     setCrFormNotes('');
+    setCrFormPodName('');
+    setCrFormTeamName('');
+    setCrFormLeadName('');
+    setCrFormSanityStatus('Pass');
+    setCrFormRca('');
     setIsChangeReleaseModalOpen(true);
   };
 
@@ -2145,6 +2237,11 @@ Signatures Registered:
     setCrFormLessonsLearned(rec.lessonsLearned || '');
     setCrFormProjectId(rec.projectId || list[0]);
     setCrFormNotes(rec.notes || '');
+    setCrFormPodName(rec.podName || '');
+    setCrFormTeamName(rec.teamName || '');
+    setCrFormLeadName(rec.leadName || '');
+    setCrFormSanityStatus(rec.sanityStatus || 'Pass');
+    setCrFormRca(rec.rcaVal || '');
     setIsChangeReleaseModalOpen(true);
   };
 
@@ -2154,7 +2251,7 @@ Signatures Registered:
 
   const handleSaveReleaseRecord = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!crFormWarJarName.trim() || !crFormPurpose.trim()) {
+    if (!crFormWarJarName.trim() || !crFormPurpose.trim() || !crFormPodName.trim() || !crFormTeamName.trim() || !crFormLeadName.trim()) {
       return;
     }
 
@@ -2179,7 +2276,12 @@ Signatures Registered:
             lessonsLearned: crFormLessonsLearned.trim(),
             projectId: crFormProjectId || list[0],
             notes: crFormNotes.trim(),
-            registeredBy: r.registeredBy || currentEmpName
+            registeredBy: r.registeredBy || currentEmpName,
+            podName: crFormPodName.trim(),
+            teamName: crFormTeamName.trim(),
+            leadName: crFormLeadName.trim(),
+            sanityStatus: crFormSanityStatus,
+            rcaVal: crFormRca.trim()
           };
         }
         return r;
@@ -2205,7 +2307,12 @@ Signatures Registered:
         lessonsLearned: crFormLessonsLearned.trim(),
         projectId: crFormProjectId || list[0],
         registeredBy: currentEmpName,
-        notes: crFormNotes.trim()
+        notes: crFormNotes.trim(),
+        podName: crFormPodName.trim(),
+        teamName: crFormTeamName.trim(),
+        leadName: crFormLeadName.trim(),
+        sanityStatus: crFormSanityStatus,
+        rcaVal: crFormRca.trim()
       };
       setChangeReleaseRecords(prev => [newRec, ...prev]);
     }
@@ -2216,8 +2323,17 @@ Signatures Registered:
 
   const filteredChangeReleases = useMemo(() => {
     return changeReleaseRecords.filter(rec => {
-      const matchProject = crFilterProject === 'All' || rec.projectId === crFilterProject;
+      // Robust project query that respects both local dropdown and global selection in header
+      const matchGlobalProject = selectedProject === 'All' || rec.projectId === selectedProject;
+      const matchLocalProject = crFilterProject === 'All' || rec.projectId === crFilterProject;
+      const matchProject = matchGlobalProject && matchLocalProject;
+
+      // Respect global employee selection in header
+      const matchEmployee = selectedEmployee === 'All' || rec.registeredBy === selectedEmployee;
+
+      // Respect local status filter
       const matchStatus = crFilterStatus === 'All' || rec.status === crFilterStatus;
+
       const q = crSearchQuery.toLowerCase().trim();
       const matchQuery = !q || 
         (rec.warJarName || '').toLowerCase().includes(q) || 
@@ -2225,24 +2341,33 @@ Signatures Registered:
         (rec.lessonsLearned || '').toLowerCase().includes(q) || 
         (rec.notes || '').toLowerCase().includes(q) || 
         (rec.id || '').toLowerCase().includes(q);
-      return matchProject && matchStatus && matchQuery;
+
+      return matchProject && matchEmployee && matchStatus && matchQuery;
     });
-  }, [changeReleaseRecords, crFilterProject, crFilterStatus, crSearchQuery]);
+  }, [changeReleaseRecords, selectedProject, crFilterProject, selectedEmployee, crFilterStatus, crSearchQuery]);
 
   const crStats = useMemo(() => {
-    const total = changeReleaseRecords.length;
-    const successful = changeReleaseRecords.filter(r => r.status === 'Successful').length;
-    const inProgress = changeReleaseRecords.filter(r => r.status === 'In Progress').length;
-    const scheduled = changeReleaseRecords.filter(r => r.status === 'Scheduled').length;
-    const failures = changeReleaseRecords.filter(r => r.status === 'Failed' || r.status === 'Rolled Back').length;
+    // Only filter the stats based on project and employee selection to represent overall health of selected group
+    const filteredRecords = changeReleaseRecords.filter(rec => {
+      const matchGlobalProject = selectedProject === 'All' || rec.projectId === selectedProject;
+      const matchLocalProject = crFilterProject === 'All' || rec.projectId === crFilterProject;
+      const matchEmployee = selectedEmployee === 'All' || rec.registeredBy === selectedEmployee;
+      return matchGlobalProject && matchLocalProject && matchEmployee;
+    });
 
-    const uatSignoffs = changeReleaseRecords.filter(r => r.hasUatSignoff).length;
-    const deploymentSignoffs = changeReleaseRecords.filter(r => r.hasDeploymentSignoff).length;
-    const docSignoffs = changeReleaseRecords.filter(r => r.hasDocReviewSignoff).length;
+    const total = filteredRecords.length;
+    const successful = filteredRecords.filter(r => r.status === 'Successful').length;
+    const inProgress = filteredRecords.filter(r => r.status === 'In Progress').length;
+    const scheduled = filteredRecords.filter(r => r.status === 'Scheduled').length;
+    const failures = filteredRecords.filter(r => r.status === 'Failed' || r.status === 'Rolled Back').length;
+
+    const uatSignoffs = filteredRecords.filter(r => r.hasUatSignoff).length;
+    const deploymentSignoffs = filteredRecords.filter(r => r.hasDeploymentSignoff).length;
+    const docSignoffs = filteredRecords.filter(r => r.hasDocReviewSignoff).length;
 
     const successRatio = total ? Math.round((successful / total) * 100) : 0;
     const uatRatio = total ? Math.round((uatSignoffs / total) * 100) : 0;
-    const rollbackRatio = total ? Math.round((changeReleaseRecords.filter(r => r.rollbackDone).length / total) * 100) : 0;
+    const rollbackRatio = total ? Math.round((filteredRecords.filter(r => r.rollbackDone).length / total) * 100) : 0;
 
     return {
       total,
@@ -2257,7 +2382,160 @@ Signatures Registered:
       uatRatio,
       rollbackRatio
     };
-  }, [changeReleaseRecords]);
+  }, [changeReleaseRecords, selectedProject, crFilterProject, selectedEmployee]);
+
+  // Dynamic grouping of release records for Daily, Weekly, and Bi-weekly dashboard analytics
+  const crTrendData = useMemo(() => {
+    const baseRecords = changeReleaseRecords.filter(rec => {
+      const matchGlobalProject = selectedProject === 'All' || rec.projectId === selectedProject;
+      const matchLocalProject = crFilterProject === 'All' || rec.projectId === crFilterProject;
+      const matchEmployee = selectedEmployee === 'All' || rec.registeredBy === selectedEmployee;
+      return matchGlobalProject && matchLocalProject && matchEmployee;
+    });
+
+    const refDate = new Date('2026-05-27T00:00:00Z'); // Baseline anchored to user's current sandbox time
+
+    if (crDashboardPeriod === 'daily') {
+      const days = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = subDays(refDate, i);
+        days.push({
+          dateStr: format(d, 'yyyy-MM-dd'),
+          label: format(d, 'EEE (MMM dd)'),
+          Successful: 0,
+          FailedDone: 0,
+          Scheduled: 0,
+          InProgress: 0,
+          Total: 0
+        });
+      }
+
+      baseRecords.forEach(rec => {
+        try {
+          const recDateStr = format(new Date(rec.deploymentDate), 'yyyy-MM-dd');
+          const dayBucket = days.find(day => day.dateStr === recDateStr);
+          if (dayBucket) {
+            dayBucket.Total++;
+            if (rec.status === 'Successful') {
+              dayBucket.Successful++;
+            } else if (rec.status === 'Failed' || rec.status === 'Rolled Back') {
+              dayBucket.FailedDone++;
+            } else if (rec.status === 'Scheduled') {
+              dayBucket.Scheduled++;
+            } else if (rec.status === 'In Progress') {
+              dayBucket.InProgress++;
+            }
+          }
+        } catch (e) {
+          // ignore parsing error
+        }
+      });
+      return days;
+    } else if (crDashboardPeriod === 'weekly') {
+      const weeks = [];
+      for (let i = 5; i >= 0; i--) {
+        const startOfW = subDays(refDate, i * 7 + 6);
+        const endOfW = subDays(refDate, i * 7);
+        weeks.push({
+          start: startOfW,
+          end: endOfW,
+          label: i === 0 ? 'This Week' : `${i} Wk(s) Ago`,
+          Successful: 0,
+          FailedDone: 0,
+          Scheduled: 0,
+          InProgress: 0,
+          Total: 0
+        });
+      }
+
+      baseRecords.forEach(rec => {
+        try {
+          const recDate = new Date(rec.deploymentDate);
+          const weekBucket = weeks.find(wk => recDate >= wk.start && recDate <= endOfDay(wk.end));
+          if (weekBucket) {
+            weekBucket.Total++;
+            if (rec.status === 'Successful') {
+              weekBucket.Successful++;
+            } else if (rec.status === 'Failed' || rec.status === 'Rolled Back') {
+              weekBucket.FailedDone++;
+            } else if (rec.status === 'Scheduled') {
+              weekBucket.Scheduled++;
+            } else if (rec.status === 'In Progress') {
+              weekBucket.InProgress++;
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+      return weeks;
+    } else {
+      const biweeks = [];
+      for (let i = 4; i >= 0; i--) {
+        const startOfBi = subDays(refDate, i * 14 + 13);
+        const endOfBi = subDays(refDate, i * 14);
+        biweeks.push({
+          start: startOfBi,
+          end: endOfBi,
+          label: i === 0 ? 'Last 2 Wks' : `Bi-Wk -${i}`,
+          Successful: 0,
+          FailedDone: 0,
+          Scheduled: 0,
+          InProgress: 0,
+          Total: 0
+        });
+      }
+
+      baseRecords.forEach(rec => {
+        try {
+          const recDate = new Date(rec.deploymentDate);
+          const biweekBucket = biweeks.find(bi => recDate >= bi.start && recDate <= endOfDay(bi.end));
+          if (biweekBucket) {
+            biweekBucket.Total++;
+            if (rec.status === 'Successful') {
+              biweekBucket.Successful++;
+            } else if (rec.status === 'Failed' || rec.status === 'Rolled Back') {
+              biweekBucket.FailedDone++;
+            } else if (rec.status === 'Scheduled') {
+              biweekBucket.Scheduled++;
+            } else if (rec.status === 'In Progress') {
+              biweekBucket.InProgress++;
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+      return biweeks;
+    }
+  }, [changeReleaseRecords, crDashboardPeriod, selectedProject, crFilterProject, selectedEmployee]);
+
+  // Robust function for exporting the registry to Excel format
+  const handleExportToExcel = () => {
+    const dataToExport = filteredChangeReleases.map(rec => ({
+      'Record ID': rec.id,
+      'Project ID': rec.projectId,
+      'Deployment Target Date': rec.deploymentDate,
+      'Package Artifact (WAR/JAR)': rec.warJarName,
+      'Change Purpose / Ref ID': rec.purpose,
+      'Status': rec.status,
+      'POD Name': rec.podName || 'N/A',
+      'Team Name': rec.teamName || 'N/A',
+      'Lead Name': rec.leadName || 'N/A',
+      'Sanity Check Status': rec.sanityStatus || 'Pass',
+      'RCA Details': rec.rcaVal || 'N/A',
+      'UAT Met Sign-off': rec.hasUatSignoff ? 'PASSED' : 'PENDING',
+      'Deployment Met Sign-off': rec.hasDeploymentSignoff ? 'PASSED' : 'PENDING',
+      'Doc Review Met Sign-off': rec.hasDocReviewSignoff ? 'PASSED' : 'PENDING',
+      'Was Rolled Back': rec.rollbackDone ? 'Yes' : 'No',
+      'Rollback Reason': rec.failureReason || 'N/A',
+      'Retrospective Lessons Learned': rec.lessonsLearned || 'N/A',
+      'Additional Notes': rec.notes || 'N/A',
+      'Registered Employee': rec.registeredBy || 'N/A',
+    }));
+
+    exportToExcel([{ name: 'Change & Release Records', data: dataToExport }], 'Change_Release_Registry.xlsx');
+  };
 
   // --- Knowledge Base Logic ---
   const kbTasks = useMemo(() => {
@@ -5526,7 +5804,17 @@ Guidelines:
                               {workbookColumns.map(col => {
                                 if (!col.visible) return null;
                                 switch (col.id) {
-                                  case 'ticketId':
+                                  case 'ticketId': {
+                                    const targetKey = 'sflow_attachments_' + task.ticketId;
+                                    const listStr = localStorage.getItem(targetKey);
+                                    let attachmentsCount = 0;
+                                    if (listStr) {
+                                      try {
+                                        const parsed = JSON.parse(listStr);
+                                        attachmentsCount = Array.isArray(parsed) ? parsed.length : 0;
+                                      } catch (e) {}
+                                    }
+
                                     return (
                                       <td key="ticketId" className="px-4 py-4 font-mono font-medium text-slate-300">
                                         <div className="flex items-center gap-2">
@@ -5536,10 +5824,27 @@ Guidelines:
                                               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                                             </span>
                                           )}
-                                          {task.ticketId}
+                                          <button 
+                                            onClick={() => setAuditTask(task)}
+                                            className="hover:text-amber-400 font-mono text-xs font-semibold hover:underline text-left cursor-pointer transition-colors"
+                                            title="Click to view full case SLA audit & active attachments list"
+                                          >
+                                            {task.ticketId}
+                                          </button>
+                                          {attachmentsCount > 0 && (
+                                            <button
+                                              onClick={() => setAuditTask(task)}
+                                              className="p-1 rounded bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20 hover:border-rose-450 flex items-center gap-1 text-[9px] font-black transition-all cursor-pointer shadow-sm animate-pulse"
+                                              title={`${attachmentsCount} file attachment(s) found. Click to inspect & download.`}
+                                            >
+                                              <Paperclip className="w-3 h-3 text-rose-400" />
+                                              <span>{attachmentsCount}</span>
+                                            </button>
+                                          )}
                                         </div>
                                       </td>
                                     );
+                                  }
                                   case 'projectId':
                                     return (
                                       <td key="projectId" className="px-4 py-4">
@@ -5772,6 +6077,30 @@ Guidelines:
                               })}
                               <td className="px-4 py-4 text-right">
                                 <div className="flex items-center justify-end gap-2">
+                                  {(() => {
+                                    const targetKey = 'sflow_attachments_' + task.ticketId;
+                                    const listStr = localStorage.getItem(targetKey);
+                                    let count = 0;
+                                    if (listStr) {
+                                      try {
+                                        count = JSON.parse(listStr).length;
+                                      } catch (e) {}
+                                    }
+                                    return (
+                                      <button 
+                                        onClick={() => setAuditTask(task)}
+                                        className={cn(
+                                          "p-1.5 rounded transition-all flex items-center justify-center border",
+                                          count > 0 
+                                            ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30 hover:border-rose-400 scale-105" 
+                                            : "bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-slate-300 border-slate-800/80 hover:border-slate-700 hidden group-hover:flex"
+                                        )}
+                                        title={count > 0 ? `${count} active attachments. Click to inspect & download.` : "Attach files or inspect details"}
+                                      >
+                                        <Paperclip className="w-3.5 h-3.5" />
+                                      </button>
+                                    );
+                                  })()}
                                   <button 
                                     onClick={() => setAuditTask(task)}
                                     className="p-1.5 bg-indigo-500/5 hover:bg-indigo-500/10 text-indigo-400 rounded transition-all opacity-0 group-hover:opacity-100"
@@ -6466,13 +6795,27 @@ Guidelines:
                           <Paperclip className="w-6 h-6" />
                         </div>
                         <div>
-                          <h4 className="text-xl font-black text-white uppercase tracking-tight font-sans">Corporate Attachment Storage Settings</h4>
-                          <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-1">Configure virtual client-mapped machine partitions for files archiving</p>
+                          <h4 className="text-xl font-black text-white uppercase tracking-tight font-sans">Attachment Configuration</h4>
+                          <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-1 font-sans">Configure local drive mapping modes and base path pathway directories for case files</p>
                         </div>
                       </div>
                       <span className="text-[9px] uppercase font-mono px-2.5 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold rounded-lg tracking-wider">
                         Filesystem Gateway
                       </span>
+                    </div>
+
+                    {/* Educational Security Info Context - Why content is not automatically inside the E:\ drive */}
+                    <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-left font-sans space-y-2">
+                      <div className="flex items-center gap-2 text-amber-400">
+                        <Info className="w-4 h-4 shrink-0" />
+                        <span className="text-xs font-black uppercase tracking-wider">Browser Sandbox & Local Drive Direct Sync Guide</span>
+                      </div>
+                      <p className="text-[10.5px] text-slate-300 leading-relaxed font-semibold">
+                        ⚠️ Because modern browsers restrict secure applications from directly accessing, editing, or writing files onto your physical system volume disk, files you drop or upload in sFlow are securely saved inside the secure browser-isolated sandbox directory first.
+                      </p>
+                      <p className="text-[10px] text-slate-400 leading-normal pl-6 relative before:content-['•'] before:absolute before:left-2 before:text-amber-500">
+                        <span className="text-white font-bold">To sync to your physical drive <span className="font-mono bg-slate-950 px-1 rounded text-emerald-400 font-semibold">{attachmentBasePath}</span>:</span> open any incident's Attachment Vault, click <span className="text-emerald-400 font-bold">"Download Original"</span> or the green <span className="text-emerald-400 font-bold">"Download All"</span> button, and drag or place those downloaded files directly inside that directory on your local machine.
+                      </p>
                     </div>
 
                     <div className="bg-slate-950/60 p-6 rounded-2xl border border-slate-850 space-y-6 font-sans text-left">
@@ -7556,7 +7899,14 @@ Guidelines:
                       </p>
                     </div>
                   </div>
-                  <div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={handleExportToExcel}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black uppercase text-[10px] tracking-widest rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-emerald-500/10"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-white" />
+                      Export Excel
+                    </button>
                     <button
                       onClick={handleOpenCreateRelease}
                       className="px-4 py-2 bg-indigo-505 hover:bg-indigo-600 active:scale-95 text-white font-black uppercase text-[10px] tracking-widest rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-indigo-500/10"
@@ -7610,6 +7960,227 @@ Guidelines:
                     </div>
                     <div className="mt-3 text-[10px] text-slate-400">
                       Rollback coverage rate: <span className="text-red-400 font-mono font-bold">{crStats.rollbackRatio}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Release Management Analytics Dashboard & Excel Data Section */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6">
+                  {/* Dashboard Header */}
+                  <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-800 pb-5">
+                    <div>
+                      <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <LayoutDashboard className="w-4 h-4 text-indigo-400 animate-none" />
+                        Release Analytics & Data Governance
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 font-sans font-medium">
+                        Deployment frequency metrics, timeline trends and deep compliance auditing parameters.
+                      </p>
+                    </div>
+
+                    {/* Daily, Weekly, Bi-weekly selectors */}
+                    <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+                      <button
+                        onClick={() => setCrDashboardPeriod('daily')}
+                        className={cn(
+                          "px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                          crDashboardPeriod === 'daily'
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+                            : "text-slate-400 hover:text-white"
+                        )}
+                      >
+                        Daily
+                      </button>
+                      <button
+                        onClick={() => setCrDashboardPeriod('weekly')}
+                        className={cn(
+                          "px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                          crDashboardPeriod === 'weekly'
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+                            : "text-slate-400 hover:text-white"
+                        )}
+                      >
+                        Weekly
+                      </button>
+                      <button
+                        onClick={() => setCrDashboardPeriod('biweekly')}
+                        className={cn(
+                          "px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                          crDashboardPeriod === 'biweekly'
+                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+                            : "text-slate-400 hover:text-white"
+                        )}
+                      >
+                        Bi-Weekly
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left Pane: Metrics overview for active period */}
+                    <div className="space-y-4">
+                      <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-2xl space-y-3">
+                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-wider block font-sans">
+                          Active Frame Insights
+                        </span>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-slate-900 border border-slate-850 rounded-xl">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Interval</span>
+                            <span className="text-xs font-black text-indigo-400 uppercase tracking-wider mt-0.5 block font-mono">
+                              {crDashboardPeriod}
+                            </span>
+                          </div>
+                          <div className="p-3 bg-slate-900 border border-slate-850 rounded-xl">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Releases</span>
+                            <span className="text-xs font-black text-white font-mono mt-0.5 block">
+                              {crTrendData.reduce((acc, curr) => acc + curr.Total, 0)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 pt-1 font-sans">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-400 font-medium">Successful Runs</span>
+                            <span className="text-emerald-400 font-bold font-mono">
+                              {crTrendData.reduce((acc, curr) => acc + curr.Successful, 0)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-400 font-medium">Failed / Rolled Back</span>
+                            <span className="text-rose-455 font-bold font-mono">
+                              {crTrendData.reduce((acc, curr) => acc + curr.FailedDone, 0)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-400 font-medium font-sans">Pending / Scheduled</span>
+                            <span className="text-indigo-400 font-bold font-mono">
+                              {crTrendData.reduce((acc, curr) => acc + (curr.Scheduled || 0), 0)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-400 font-medium font-sans">Active In-Progress</span>
+                            <span className="text-amber-400 font-bold font-mono">
+                              {crTrendData.reduce((acc, curr) => acc + (curr.InProgress || 0), 0)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Excel Data Export Vault Section requested by the user */}
+                      <div className="p-4 bg-emerald-950/10 border border-emerald-900/25 rounded-2xl space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                            <FileSpreadsheet className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-emerald-400 uppercase font-black tracking-wider block font-sans">
+                              Excel Extraction Section
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-medium block font-sans">
+                              Integrative release auditing
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-slate-350 leading-relaxed font-sans font-medium">
+                          Extract current release configuration matrices, security status checks, team ownership details, and stabilization benchmarks to a beautifully formatted Microsoft Excel document.
+                        </p>
+
+                        <button
+                          onClick={handleExportToExcel}
+                          className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black uppercase text-[10px] tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/5 hover:border hover:border-emerald-500/10 font-sans"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Extract Registry to Excel
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Chart Pane: Recharts visualizations */}
+                    <div className="lg:col-span-2 bg-slate-950/45 border border-slate-850 p-5 rounded-2xl flex flex-col justify-between">
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider font-sans">
+                          Rollout Volume & Stabilization Trend (by Selected Filters)
+                        </span>
+                        <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-wider font-sans">
+                          <span className="flex items-center gap-1 text-emerald-400">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 block" /> Success
+                          </span>
+                          <span className="flex items-center gap-1 text-red-400">
+                            <span className="w-2 h-2 rounded-full bg-rose-500 block" /> Failed
+                          </span>
+                          <span className="flex items-center gap-1 text-indigo-400">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500 block" /> Sch / IP
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="h-44 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={crTrendData}
+                            margin={{ top: 10, right: 10, left: -25, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <XAxis 
+                              dataKey="label" 
+                              stroke="#64748b" 
+                              fontSize={9} 
+                              tickLine={false} 
+                            />
+                            <YAxis 
+                              stroke="#64748b" 
+                              fontSize={9} 
+                              tickLine={false} 
+                              allowDecimals={false}
+                            />
+                            <Tooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl shadow-xl text-left space-y-1.5 font-sans">
+                                      <p className="text-[10px] font-black uppercase text-slate-400">{data.label}</p>
+                                      <div className="space-y-0.5 text-[11px]">
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-slate-405 font-medium">Successful:</span>
+                                          <span className="text-emerald-400 font-black font-mono">{data.Successful}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-slate-405 font-medium">Failed/Rolled Back:</span>
+                                          <span className="text-red-400 font-black font-mono">{data.FailedDone}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-slate-405 font-medium">Scheduled:</span>
+                                          <span className="text-indigo-400 font-black font-mono">{data.Scheduled}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-slate-405 font-medium">In Progress:</span>
+                                          <span className="text-amber-400 font-black font-mono">{data.InProgress}</span>
+                                        </div>
+                                        <div className="border-t border-slate-900 pt-1 mt-1 flex justify-between gap-4 text-xs font-black">
+                                          <span className="text-white">Total Records:</span>
+                                          <span className="text-slate-100 font-mono">{data.Total}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="Successful" fill="#10b981" radius={[4, 4, 0, 0]} stackId="a" />
+                            <Bar dataKey="FailedDone" fill="#f43f5e" radius={[4, 4, 0, 0]} stackId="a" />
+                            <Bar dataKey="Scheduled" fill="#6366f1" radius={[4, 4, 0, 0]} stackId="a" />
+                            <Bar dataKey="InProgress" fill="#f59e0b" radius={[4, 4, 0, 0]} stackId="a" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="text-[9px] text-slate-500 italic mt-2 text-center select-none font-sans font-medium">
+                        * Trends are real-time, matching active {selectedProject === 'All' ? 'global configurations' : `${selectedProject} specifications`}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -7713,20 +8284,35 @@ Guidelines:
                               {rec.purpose}
                             </p>
 
-                            {/* Meta field: Date & Registered By */}
-                            <div className="flex flex-wrap gap-x-6 gap-y-1 pt-2 border-t border-slate-800/50 mt-3 text-[10px] font-sans text-slate-405 select-none">
+                            {/* Meta field: Date, Registered By, POD, Team, Lead */}
+                            <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 border-t border-slate-800/50 mt-3 text-[10px] font-sans text-slate-400 select-none">
                               <span className="flex items-center gap-1.5 font-sans">
-                                <Calendar className="w-3.5 h-3.5 text-slate-505 shrink-0" />
+                                <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                                 <strong className="text-slate-500 uppercase font-black">Target Deployment:</strong> {formattedDate()}
                               </span>
                               <span className="flex items-center gap-1.5 font-sans">
-                                <Users className="w-3.5 h-3.5 text-slate-505 shrink-0" />
-                                <strong className="text-slate-505 uppercase font-black">Registered Employee:</strong> {rec.registeredBy}
+                                <Users className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                <strong className="text-slate-500 uppercase font-black">Registered Employee:</strong> {rec.registeredBy}
                               </span>
+                              {rec.podName && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/5 border border-indigo-500/10 rounded font-sans">
+                                  <strong className="text-indigo-400 uppercase font-black text-[9px]">POD:</strong> <span className="text-slate-300 font-mono font-bold">{rec.podName}</span>
+                                </span>
+                              )}
+                              {rec.teamName && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/5 border border-indigo-500/10 rounded font-sans">
+                                  <strong className="text-indigo-400 uppercase font-black text-[9px]">Team:</strong> <span className="text-slate-300 font-bold">{rec.teamName}</span>
+                                </span>
+                              )}
+                              {rec.leadName && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-500/5 border border-indigo-500/10 rounded font-sans">
+                                  <strong className="text-indigo-400 uppercase font-black text-[9px]">Lead:</strong> <span className="text-slate-300 font-semibold">{rec.leadName}</span>
+                                </span>
+                              )}
                             </div>
                           </div>
 
-                          {/* Pre-deployment Sign-off metrics on right side */}
+                          {/* Pre-deployment Sign-off metrics and Sanity status on right side */}
                           <div className="bg-slate-950/40 p-4 border border-slate-800/80 rounded-2xl w-full lg:w-72 shrink-0 space-y-3 select-none text-left">
                             <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block border-b border-slate-850 pb-1.5 mb-1 text-center font-sans font-bold">
                               Process Sign-off Auditing
@@ -7776,12 +8362,43 @@ Guidelines:
                                 </span>
                               )}
                             </div>
+
+                            <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block border-b border-slate-850 pb-1.5 pt-2 mb-1 text-center font-sans font-bold">
+                              Sanity & Stabilization Check
+                            </span>
+
+                            <div className="flex items-center justify-between text-[11px] font-sans">
+                              <span className="text-slate-400 font-semibold">Deployment Status</span>
+                              {rec.sanityStatus === 'Fail' ? (
+                                <span className="text-rose-400 font-extrabold uppercase text-[10px] flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">
+                                  <X className="w-3 h-3 text-rose-500 shrink-0" />
+                                  FAIL
+                                </span>
+                              ) : (
+                                <span className="text-emerald-400 font-extrabold uppercase text-[10px] flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                                  PASS
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
                         {/* Extra failure / Retrospectives conditional views */}
-                        {(rec.failureReason || rec.lessonsLearned || rec.notes) && (
+                        {(rec.failureReason || rec.lessonsLearned || rec.notes || rec.rcaVal || rec.sanityStatus === 'Fail') && (
                           <div className="mt-4 pt-4 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {rec.sanityStatus === 'Fail' && rec.rcaVal && (
+                              <div className="p-3 bg-red-950/20 rounded-2xl border border-red-900/20 text-xs text-left md:col-span-2">
+                                <span className="text-red-400 font-black uppercase text-[10px] flex items-center gap-1 mb-1 font-sans">
+                                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                                  Root Cause Analysis (RCA)
+                                </span>
+                                <p className="text-slate-300 font-medium leading-relaxed font-mono text-[11px]">
+                                  {rec.rcaVal}
+                                </p>
+                              </div>
+                            )}
+
                             {rec.failureReason && (
                               <div className="p-3 bg-red-950/20 rounded-2xl border border-red-900/20 text-xs text-left">
                                 <span className="text-red-400 font-black uppercase text-[10px] flex items-center gap-1 mb-1">
@@ -7918,6 +8535,43 @@ Guidelines:
                       </div>
                     </div>
 
+                    {/* POD, Team, and Lead name mandatory fields */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="label-sm text-slate-400">POD Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. POD-Alpha"
+                          className="input-field text-xs text-slate-100"
+                          value={crFormPodName}
+                          onChange={e => setCrFormPodName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="label-sm text-slate-400">Team Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Core Billing Engineering"
+                          className="input-field text-xs text-slate-100"
+                          value={crFormTeamName}
+                          onChange={e => setCrFormTeamName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="label-sm text-slate-400">Lead Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Rajesh Kumar"
+                          className="input-field text-xs text-slate-100"
+                          value={crFormLeadName}
+                          onChange={e => setCrFormLeadName(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
                     {/* Purpose / Incident Code / APOM */}
                     <div>
                       <label className="label-sm">Purpose / Incident / APOM ID *</label>
@@ -7968,7 +8622,7 @@ Guidelines:
 
                     {/* Checklist boxes */}
                     <div className="bg-slate-950/45 p-4 rounded-2xl border border-slate-800/80 space-y-3">
-                      <span className="text-[10px] text-slate-500 uppercase font-black tracking-wider block border-b border-slate-850 pb-1.5 select-none">
+                      <span className="text-[10px] text-slate-500 uppercase font-black tracking-wider block border-b border-slate-850 pb-1.5 select-none font-sans">
                         Pre-Deployment Checklist Auditing
                       </span>
 
@@ -7986,7 +8640,7 @@ Guidelines:
                         <label className="flex items-center gap-2.5 cursor-pointer select-none">
                           <input
                             type="checkbox"
-                            className="w-4 h-4 rounded border-slate-805 bg-slate-850 text-indigo-505 focus:ring-indigo-500/20"
+                            className="w-4 h-4 rounded border-slate-805 bg-slate-850 text-indigo-555 focus:ring-indigo-500/20"
                             checked={crFormHasUatSignoff}
                             onChange={e => setCrFormHasUatSignoff(e.target.checked)}
                           />
@@ -8003,6 +8657,76 @@ Guidelines:
                           <span className="text-[11px] text-slate-350 font-bold uppercase tracking-wide">Doc Review Sign-Off</span>
                         </label>
                       </div>
+                    </div>
+
+                    {/* Sanity and Stabilization Check */}
+                    <div className="bg-slate-950/45 p-4 rounded-2xl border border-slate-800/80 space-y-3">
+                      <span className="text-[10px] text-slate-500 uppercase font-black tracking-wider block border-b border-slate-850 pb-1.5 select-none font-sans">
+                        Sanity and Stabilization Check
+                      </span>
+
+                      <div className="space-y-2 text-left">
+                        <label className="label-sm block">Deployment Status *</label>
+                        <div className="flex items-center gap-6">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="radio"
+                              name="sanityStatus"
+                              value="Pass"
+                              checked={crFormSanityStatus === 'Pass'}
+                              onChange={() => setCrFormSanityStatus('Pass')}
+                              className="w-4 h-4 text-emerald-500 bg-slate-850 border-slate-800 focus:ring-emerald-500/20"
+                            />
+                            <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Pass</span>
+                          </label>
+
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="radio"
+                              name="sanityStatus"
+                              value="Fail"
+                              checked={crFormSanityStatus === 'Fail'}
+                              onChange={() => setCrFormSanityStatus('Fail')}
+                              className="w-4 h-4 text-rose-500 bg-slate-850 border-slate-800 focus:ring-rose-500/20"
+                            />
+                            <span className="text-xs font-black uppercase tracking-wider text-rose-400">Fail</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Incase Fail, need RCA and Lessons Learned (Retrospective) section */}
+                      <AnimatePresence>
+                        {crFormSanityStatus === 'Fail' && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="pt-3 border-t border-slate-850 space-y-3"
+                          >
+                            <div>
+                              <label className="label-sm text-rose-455">Root Cause Analysis (RCA) *</label>
+                              <textarea
+                                required
+                                placeholder="Detail the root cause of the deployment/sanity failure..."
+                                className="input-field text-xs bg-slate-950/20 mt-1 min-h-[60px]"
+                                value={crFormRca}
+                                onChange={e => setCrFormRca(e.target.value)}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="label-sm text-violet-400">Lessons Learned (Retrospective) *</label>
+                              <textarea
+                                required
+                                placeholder="Detail the lessons learned and retrospective highlights..."
+                                className="input-field text-xs bg-slate-950/20 mt-1 min-h-[60px]"
+                                value={crFormLessonsLearned}
+                                onChange={e => setCrFormLessonsLearned(e.target.value)}
+                              />
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
                     {/* Failure details (only visible if status is Failed or Rolled Back) */}
@@ -8037,18 +8761,20 @@ Guidelines:
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Lessons learned */}
-                      <div>
-                        <label className="label-sm">Lessons Learned (Retrospective)</label>
-                        <textarea
-                          placeholder="e.g. Always schedule staging validation lock 48h before release..."
-                          className="input-field min-h-[60px] text-xs"
-                          value={crFormLessonsLearned}
-                          onChange={e => setCrFormLessonsLearned(e.target.value)}
-                        />
-                      </div>
+                      {crFormSanityStatus !== 'Fail' && (
+                        <div>
+                          <label className="label-sm">Lessons Learned (Retrospective)</label>
+                          <textarea
+                            placeholder="e.g. Always schedule staging validation lock 48h before release..."
+                            className="input-field min-h-[60px] text-xs"
+                            value={crFormLessonsLearned}
+                            onChange={e => setCrFormLessonsLearned(e.target.value)}
+                          />
+                        </div>
+                      )}
 
                       {/* Execution Notes */}
-                      <div>
+                      <div className={crFormSanityStatus === 'Fail' ? "md:col-span-2" : ""}>
                         <label className="label-sm">Additional Execution Notes</label>
                         <textarea
                           placeholder="Include rollback command syntax, port mappings, or validation URIs..."
@@ -8508,7 +9234,7 @@ Guidelines:
 
                     {/* Active Case Attachment Vault & Native Directory Layout */}
                     <div className="space-y-4 pt-6 border-t border-slate-800/60 font-sans">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-905 p-3 rounded-xl border border-slate-850/50">
                         <div className="flex items-center gap-2">
                           <Paperclip className="w-5 h-5 text-rose-500" />
                           <div>
@@ -8516,13 +9242,49 @@ Guidelines:
                             <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Corporate files associated with this specific incident sequence</p>
                           </div>
                         </div>
-                        <span className={`text-[9.5px] font-mono px-2.5 py-0.5 rounded border uppercase font-bold tracking-wider ${
-                          attachmentStorageMode === 'local' 
-                            ? 'text-rose-400 bg-rose-500/10 border-rose-500/15' 
-                            : 'text-blue-400 bg-blue-500/10 border-blue-500/15'
-                        }`}>
-                          {attachmentStorageMode === 'local' ? 'Drive-Mapped Storage Mode' : 'Browser Sandbox Secure Mode'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const targetKey = 'sflow_attachments_' + auditTask.ticketId;
+                            const listStr = localStorage.getItem(targetKey);
+                            let list: any[] = [];
+                            if (listStr) {
+                              try {
+                                const parsed = JSON.parse(listStr);
+                                if (Array.isArray(parsed)) list = parsed;
+                              } catch (e) {}
+                            }
+                            if (list.length > 0) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    list.forEach((doc: any) => {
+                                      const link = document.createElement('a');
+                                      link.href = doc.dataUrl;
+                                      link.download = doc.name;
+                                      document.body.appendChild(link);
+                                      link.click();
+                                      document.body.removeChild(link);
+                                    });
+                                  }}
+                                  className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
+                                  title="Download all attachments of this ticket on-demand to sync with your E:\ drive"
+                                >
+                                  <Download className="w-3 h-3 text-emerald-400" />
+                                  <span>Download All ({list.length})</span>
+                                </button>
+                              );
+                            }
+                            return null;
+                          })()}
+                          <span className={`text-[9.5px] font-mono px-2.5 py-0.5 rounded border uppercase font-bold tracking-wider ${
+                            attachmentStorageMode === 'local' 
+                              ? 'text-rose-400 bg-rose-500/10 border-rose-500/15' 
+                              : 'text-blue-400 bg-blue-500/10 border-blue-500/15'
+                          }`}>
+                            {attachmentStorageMode === 'local' ? 'Drive-Mapped Storage Mode' : 'Browser Sandbox Secure Mode'}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Path Configuration Info */}
@@ -8561,6 +9323,17 @@ Guidelines:
                             : 'All files are securely sandboxed locally using high-performance local buffer serialization to prevent unauthorized external access.'
                           }
                         </p>
+                        {attachmentStorageMode === 'local' && (
+                          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/15 text-[10px] text-slate-300 leading-normal font-sans text-left">
+                            <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-extrabold text-amber-400 uppercase tracking-wide text-[9px]">Local Directory Integration Notice</p>
+                              <p className="mt-0.5">
+                                Secure browsers prevent external web applications from directly writing files onto your computer's drive partitions. To synchronize: use the <span className="text-emerald-400 font-bold">"Download"</span> or <span className="text-emerald-400 font-bold">"Download All"</span> triggers, then place the files in your mapping directory: <span className="font-mono text-white text-[9px] font-semibold bg-slate-950 px-1 py-0.5 rounded">{attachmentBasePath}</span>.
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
