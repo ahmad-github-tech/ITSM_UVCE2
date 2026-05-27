@@ -1003,7 +1003,8 @@ Signatures Registered:
         lessonsLearned: 'UAT testing completed on staging ahead of target, reducing integration adjustments.',
         projectId: 'HR-Portal',
         registeredBy: 'Admin',
-        notes: 'SLA checklist and rollback procedure fully validated.'
+        notes: 'SLA checklist and rollback procedure fully validated.',
+        sanityStatus: 'Pass'
       },
       {
         id: 'CR-1002',
@@ -1021,7 +1022,8 @@ Signatures Registered:
         lessonsLearned: '',
         projectId: 'E-Commerce',
         registeredBy: 'Admin',
-        notes: 'Maintenance window approved for 21:00 UTC Friday.'
+        notes: 'Maintenance window approved for 21:00 UTC Friday.',
+        sanityStatus: 'Pending'
       },
       {
         id: 'CR-1003',
@@ -1039,7 +1041,8 @@ Signatures Registered:
         lessonsLearned: 'Always perform synthetic mock load testing on target database size snapshot before migration execution.',
         projectId: 'Internal-CRM',
         registeredBy: 'Admin',
-        notes: 'Rollback script completed successfully within 9 minutes. User sessions restored automatically.'
+        notes: 'Rollback script completed successfully within 9 minutes. User sessions restored automatically.',
+        sanityStatus: 'Fail'
       },
       {
         id: 'CR-1004',
@@ -1156,7 +1159,7 @@ Signatures Registered:
   const [crFormPodName, setCrFormPodName] = useState('');
   const [crFormTeamName, setCrFormTeamName] = useState('');
   const [crFormLeadName, setCrFormLeadName] = useState('');
-  const [crFormSanityStatus, setCrFormSanityStatus] = useState<string>('Pass');
+  const [crFormSanityStatus, setCrFormSanityStatus] = useState<string>('Pending');
   const [crFormRca, setCrFormRca] = useState('');
   const [crFormIntimationDate, setCrFormIntimationDate] = useState('');
   const [crFormSanityCheckDate, setCrFormSanityCheckDate] = useState('');
@@ -2236,7 +2239,7 @@ Signatures Registered:
     setCrFormPodName('');
     setCrFormTeamName('');
     setCrFormLeadName('');
-    setCrFormSanityStatus('Pass');
+    setCrFormSanityStatus('Pending');
     setCrFormRca('');
     setIsChangeReleaseModalOpen(true);
   };
@@ -2293,7 +2296,7 @@ Signatures Registered:
     setCrFormPodName(rec.podName || '');
     setCrFormTeamName(rec.teamName || '');
     setCrFormLeadName(rec.leadName || '');
-    setCrFormSanityStatus(rec.sanityStatus || 'Pass');
+    setCrFormSanityStatus(rec.sanityStatus || 'Pending');
     setCrFormRca(rec.rcaVal || '');
     setIsChangeReleaseModalOpen(true);
   };
@@ -2724,7 +2727,7 @@ Signatures Registered:
         'Team Name': rec.teamName || 'N/A',
         'Lead Name': rec.leadName || 'N/A',
         'Sanity Check Date': dispSanityDate,
-        'Sanity Check Status': rec.sanityStatus || 'Pass',
+        'Sanity Check Status': rec.sanityStatus || 'Pending',
         'RCA Details': rec.rcaVal || 'N/A',
         'UAT Met Sign-off': rec.hasUatSignoff ? 'PASSED' : 'PENDING',
         'Deployment Met Sign-off': rec.hasDeploymentSignoff ? 'PASSED' : 'PENDING',
@@ -8665,6 +8668,11 @@ Guidelines:
                                   <X className="w-3 h-3 text-rose-500 shrink-0" />
                                   FAIL
                                 </span>
+                              ) : rec.sanityStatus === 'Pending' ? (
+                                <span className="text-amber-400 font-extrabold uppercase text-[10px] flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+                                  <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+                                  PENDING
+                                </span>
                               ) : (
                                 <span className="text-emerald-400 font-extrabold uppercase text-[10px] flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
@@ -8982,7 +8990,19 @@ Guidelines:
 
                         <div>
                           <label className="label-sm block mb-1">Deployment Status *</label>
-                          <div className="flex items-center gap-6 pt-2">
+                          <div className="flex items-center gap-4 pt-2">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                type="radio"
+                                name="sanityStatus"
+                                value="Pending"
+                                checked={crFormSanityStatus === 'Pending'}
+                                onChange={() => setCrFormSanityStatus('Pending')}
+                                className="w-4 h-4 text-amber-500 bg-slate-850 border-slate-800 focus:ring-amber-500/20 shadow-sm"
+                              />
+                              <span className="text-xs font-black uppercase tracking-wider text-amber-400">Pending</span>
+                            </label>
+
                             <label className="flex items-center gap-2 cursor-pointer select-none">
                               <input
                                 type="radio"
@@ -8990,7 +9010,7 @@ Guidelines:
                                 value="Pass"
                                 checked={crFormSanityStatus === 'Pass'}
                                 onChange={() => setCrFormSanityStatus('Pass')}
-                                className="w-4 h-4 text-emerald-500 bg-slate-850 border-slate-800 focus:ring-emerald-500/20"
+                                className="w-4 h-4 text-emerald-500 bg-slate-850 border-slate-800 focus:ring-emerald-500/20 shadow-sm"
                               />
                               <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Pass</span>
                             </label>
@@ -9002,7 +9022,7 @@ Guidelines:
                                 value="Fail"
                                 checked={crFormSanityStatus === 'Fail'}
                                 onChange={() => setCrFormSanityStatus('Fail')}
-                                className="w-4 h-4 text-rose-500 bg-slate-850 border-slate-800 focus:ring-rose-500/20"
+                                className="w-4 h-4 text-rose-500 bg-slate-850 border-slate-800 focus:ring-rose-500/20 shadow-sm"
                               />
                               <span className="text-xs font-black uppercase tracking-wider text-rose-400">Fail</span>
                             </label>
