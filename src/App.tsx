@@ -841,6 +841,94 @@ export default function App() {
   const [analyticsSubView, setAnalyticsSubView] = useState<'system' | 'productivity'>('system');
   const [prodSelectedRes, setProdSelectedRes] = useState<string>('All');
 
+  // Change & Release Management States
+  const [changeReleaseRecords, setChangeReleaseRecords] = useState<any[]>(() => {
+    const saved = localStorage.getItem('sflow_change_release_records');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse release records", e);
+      }
+    }
+    return [
+      {
+        id: 'CR-1001',
+        warJarName: 'hr-portal-v2.4.1.war',
+        purpose: 'v2.4.1 Production Rollout - Payroll Module Enhancements',
+        deploymentDate: '2026-05-20T14:30:00Z',
+        status: 'Successful',
+        hasDeploymentSignoff: true,
+        hasUatSignoff: true,
+        hasDocReviewSignoff: true,
+        rollbackDone: false,
+        failureReason: '',
+        lessonsLearned: 'UAT testing completed on staging ahead of target, reducing integration adjustments.',
+        projectId: 'HR-Portal',
+        registeredBy: 'Admin',
+        notes: 'SLA checklist and rollback procedure fully validated.'
+      },
+      {
+        id: 'CR-1002',
+        warJarName: 'payment-gateway-v1.9.0.jar',
+        purpose: 'v1.9.0 Payment Gateway Update - Secure 3D-Secure integration',
+        deploymentDate: '2026-05-29T21:00:00Z',
+        status: 'Scheduled',
+        hasDeploymentSignoff: true,
+        hasUatSignoff: true,
+        hasDocReviewSignoff: true,
+        rollbackDone: false,
+        failureReason: '',
+        lessonsLearned: '',
+        projectId: 'E-Commerce',
+        registeredBy: 'Admin',
+        notes: 'Maintenance window approved for 21:00 UTC Friday.'
+      },
+      {
+        id: 'CR-1003',
+        warJarName: 'crm-backend-v3.1.2.jar',
+        purpose: 'v3.1.2 DB Migration - Customer interactions schema updates',
+        deploymentDate: '2026-05-18T08:00:00Z',
+        status: 'Rolled Back',
+        hasDeploymentSignoff: true,
+        hasUatSignoff: false,
+        hasDocReviewSignoff: true,
+        rollbackDone: true,
+        failureReason: 'Database migration scripts lockup due to concurrent transactions in user session tables.',
+        lessonsLearned: 'Always perform synthetic mock load testing on target database size snapshot before migration execution.',
+        projectId: 'Internal-CRM',
+        registeredBy: 'Admin',
+        notes: 'Rollback script completed successfully within 9 minutes. User sessions restored automatically.'
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sflow_change_release_records', JSON.stringify(changeReleaseRecords));
+  }, [changeReleaseRecords]);
+
+  const [isChangeReleaseModalOpen, setIsChangeReleaseModalOpen] = useState(false);
+  const [editingReleaseRecord, setEditingReleaseRecord] = useState<any | null>(null);
+
+  // Form states for change/release
+  const [crFormWarJarName, setCrFormWarJarName] = useState('');
+  const [crFormPurpose, setCrFormPurpose] = useState('');
+  const [crFormDeploymentDate, setCrFormDeploymentDate] = useState('');
+  const [crFormStatus, setCrFormStatus] = useState<string>('Scheduled');
+  const [crFormHasDeploymentSignoff, setCrFormHasDeploymentSignoff] = useState(false);
+  const [crFormHasUatSignoff, setCrFormHasUatSignoff] = useState(false);
+  const [crFormHasDocReviewSignoff, setCrFormHasDocReviewSignoff] = useState(false);
+  const [crFormRollbackDone, setCrFormRollbackDone] = useState(false);
+  const [crFormFailureReason, setCrFormFailureReason] = useState('');
+  const [crFormLessonsLearned, setCrFormLessonsLearned] = useState('');
+  const [crFormProjectId, setCrFormProjectId] = useState('HR-Portal');
+  const [crFormNotes, setCrFormNotes] = useState('');
+
+  // Filtering for Change & Release
+  const [crFilterProject, setCrFilterProject] = useState('All');
+  const [crFilterStatus, setCrFilterStatus] = useState('All');
+  const [crSearchQuery, setCrSearchQuery] = useState('');
+
   // Knowledge Base States
   const [kbSearchQuery, setKbSearchQuery] = useState('');
   const [kbSelectedProject, setKbSelectedProject] = useState('All');
@@ -1879,6 +1967,162 @@ export default function App() {
       }
     };
   }, [projectFilteredTasks, trendPeriod, customStartDate, customEndDate, projectConfigs, users]);
+
+  // --- Change & Release Management Logic ---
+  const handleOpenCreateRelease = () => {
+    const list = PROJECTS_LIST.length > 0 ? PROJECTS_LIST : ['HR-Portal', 'E-Commerce', 'Internal-CRM', 'Mobile-App'];
+    setEditingReleaseRecord(null);
+    setCrFormWarJarName('');
+    setCrFormPurpose('');
+    setCrFormDeploymentDate(new Date().toISOString().substring(0, 16)); // YYYY-MM-DDTHH:MM
+    setCrFormStatus('Scheduled');
+    setCrFormHasDeploymentSignoff(false);
+    setCrFormHasUatSignoff(false);
+    setCrFormHasDocReviewSignoff(false);
+    setCrFormRollbackDone(false);
+    setCrFormFailureReason('');
+    setCrFormLessonsLearned('');
+    setCrFormProjectId(list[0]);
+    setCrFormNotes('');
+    setIsChangeReleaseModalOpen(true);
+  };
+
+  const handleOpenEditRelease = (rec: any) => {
+    const list = PROJECTS_LIST.length > 0 ? PROJECTS_LIST : ['HR-Portal', 'E-Commerce', 'Internal-CRM', 'Mobile-App'];
+    setEditingReleaseRecord(rec);
+    setCrFormWarJarName(rec.warJarName || '');
+    setCrFormPurpose(rec.purpose || '');
+    let dateStr = '';
+    try {
+      if (rec.deploymentDate) {
+        dateStr = new Date(rec.deploymentDate).toISOString().substring(0, 16);
+      }
+    } catch(e) {
+      dateStr = new Date().toISOString().substring(0, 16);
+    }
+    setCrFormDeploymentDate(dateStr || new Date().toISOString().substring(0, 16));
+    setCrFormStatus(rec.status || 'Scheduled');
+    setCrFormHasDeploymentSignoff(!!rec.hasDeploymentSignoff);
+    setCrFormHasUatSignoff(!!rec.hasUatSignoff);
+    setCrFormHasDocReviewSignoff(!!rec.hasDocReviewSignoff);
+    setCrFormRollbackDone(!!rec.rollbackDone);
+    setCrFormFailureReason(rec.failureReason || '');
+    setCrFormLessonsLearned(rec.lessonsLearned || '');
+    setCrFormProjectId(rec.projectId || list[0]);
+    setCrFormNotes(rec.notes || '');
+    setIsChangeReleaseModalOpen(true);
+  };
+
+  const handleDeleteReleaseRecord = (id: string) => {
+    setChangeReleaseRecords(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleSaveReleaseRecord = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!crFormWarJarName.trim() || !crFormPurpose.trim()) {
+      return;
+    }
+
+    const currentEmpName = currentLoggedInUserObj?.name || currentUser || 'Admin';
+    const list = PROJECTS_LIST.length > 0 ? PROJECTS_LIST : ['HR-Portal', 'E-Commerce', 'Internal-CRM', 'Mobile-App'];
+
+    if (editingReleaseRecord) {
+      // Update
+      setChangeReleaseRecords(prev => prev.map(r => {
+        if (r.id === editingReleaseRecord.id) {
+          return {
+            ...r,
+            warJarName: crFormWarJarName.trim(),
+            purpose: crFormPurpose.trim(),
+            deploymentDate: new Date(crFormDeploymentDate).toISOString(),
+            status: crFormStatus,
+            hasDeploymentSignoff: crFormHasDeploymentSignoff,
+            hasUatSignoff: crFormHasUatSignoff,
+            hasDocReviewSignoff: crFormHasDocReviewSignoff,
+            rollbackDone: crFormRollbackDone,
+            failureReason: crFormFailureReason.trim(),
+            lessonsLearned: crFormLessonsLearned.trim(),
+            projectId: crFormProjectId || list[0],
+            notes: crFormNotes.trim(),
+            registeredBy: r.registeredBy || currentEmpName
+          };
+        }
+        return r;
+      }));
+    } else {
+      // Add new
+      const nextNum = changeReleaseRecords.reduce((max, r) => {
+        const num = parseInt(r.id.replace('CR-', ''), 10);
+        return isNaN(num) ? max : Math.max(max, num);
+      }, 1000) + 1;
+
+      const newRec = {
+        id: `CR-${nextNum}`,
+        warJarName: crFormWarJarName.trim(),
+        purpose: crFormPurpose.trim(),
+        deploymentDate: new Date(crFormDeploymentDate).toISOString(),
+        status: crFormStatus,
+        hasDeploymentSignoff: crFormHasDeploymentSignoff,
+        hasUatSignoff: crFormHasUatSignoff,
+        hasDocReviewSignoff: crFormHasDocReviewSignoff,
+        rollbackDone: crFormRollbackDone,
+        failureReason: crFormFailureReason.trim(),
+        lessonsLearned: crFormLessonsLearned.trim(),
+        projectId: crFormProjectId || list[0],
+        registeredBy: currentEmpName,
+        notes: crFormNotes.trim()
+      };
+      setChangeReleaseRecords(prev => [newRec, ...prev]);
+    }
+
+    setIsChangeReleaseModalOpen(false);
+    setEditingReleaseRecord(null);
+  };
+
+  const filteredChangeReleases = useMemo(() => {
+    return changeReleaseRecords.filter(rec => {
+      const matchProject = crFilterProject === 'All' || rec.projectId === crFilterProject;
+      const matchStatus = crFilterStatus === 'All' || rec.status === crFilterStatus;
+      const q = crSearchQuery.toLowerCase().trim();
+      const matchQuery = !q || 
+        (rec.warJarName || '').toLowerCase().includes(q) || 
+        (rec.purpose || '').toLowerCase().includes(q) || 
+        (rec.lessonsLearned || '').toLowerCase().includes(q) || 
+        (rec.notes || '').toLowerCase().includes(q) || 
+        (rec.id || '').toLowerCase().includes(q);
+      return matchProject && matchStatus && matchQuery;
+    });
+  }, [changeReleaseRecords, crFilterProject, crFilterStatus, crSearchQuery]);
+
+  const crStats = useMemo(() => {
+    const total = changeReleaseRecords.length;
+    const successful = changeReleaseRecords.filter(r => r.status === 'Successful').length;
+    const inProgress = changeReleaseRecords.filter(r => r.status === 'In Progress').length;
+    const scheduled = changeReleaseRecords.filter(r => r.status === 'Scheduled').length;
+    const failures = changeReleaseRecords.filter(r => r.status === 'Failed' || r.status === 'Rolled Back').length;
+
+    const uatSignoffs = changeReleaseRecords.filter(r => r.hasUatSignoff).length;
+    const deploymentSignoffs = changeReleaseRecords.filter(r => r.hasDeploymentSignoff).length;
+    const docSignoffs = changeReleaseRecords.filter(r => r.hasDocReviewSignoff).length;
+
+    const successRatio = total ? Math.round((successful / total) * 100) : 0;
+    const uatRatio = total ? Math.round((uatSignoffs / total) * 100) : 0;
+    const rollbackRatio = total ? Math.round((changeReleaseRecords.filter(r => r.rollbackDone).length / total) * 100) : 0;
+
+    return {
+      total,
+      successful,
+      inProgress,
+      scheduled,
+      failures,
+      uatSignoffs,
+      deploymentSignoffs,
+      docSignoffs,
+      successRatio,
+      uatRatio,
+      rollbackRatio
+    };
+  }, [changeReleaseRecords]);
 
   // --- Knowledge Base Logic ---
   const kbTasks = useMemo(() => {
@@ -3741,7 +3985,7 @@ Guidelines:
                   onClick={() => setIsUtilityDropdownOpen(!isUtilityDropdownOpen)}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
-                    (activeTab as string) === 'knowledge-base' ? "bg-slate-800 text-white shadow-lg shadow-black/20" : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/40"
+                    ['knowledge-base', 'change-release'].includes(activeTab as string) ? "bg-slate-800 text-white shadow-lg shadow-black/20" : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/40"
                   )}
                 >
                   <Wrench className="w-3.5 h-3.5 text-sky-400 shrink-0" />
@@ -3760,12 +4004,12 @@ Guidelines:
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute left-0 mt-2 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden"
+                        className="absolute left-0 mt-2 w-52 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden text-left"
                       >
                         <div className="px-3 py-2 border-b border-slate-800 bg-slate-950/40">
                           <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest">Helper Utilities</span>
                         </div>
-                        <div className="p-1">
+                        <div className="p-1 space-y-0.5">
                           <button
                             onClick={() => {
                               setActiveTab('knowledge-base' as any);
@@ -3783,6 +4027,25 @@ Guidelines:
                             </div>
                             {(activeTab as string) === 'knowledge-base' && (
                               <div className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setActiveTab('change-release' as any);
+                              setIsUtilityDropdownOpen(false);
+                            }}
+                            className={cn(
+                              "w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800 rounded-md text-slate-300 hover:text-white transition-colors text-xs font-bold text-left cursor-pointer",
+                              (activeTab as string) === 'change-release' && "bg-slate-850 text-white shadow"
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                              <span>Change & Release</span>
+                            </div>
+                            {(activeTab as string) === 'change-release' && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
                             )}
                           </button>
                         </div>
@@ -6910,6 +7173,557 @@ Guidelines:
 
                 </div>
               </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence mode="wait">
+            {(activeTab as string) === 'change-release' && (
+              <motion.div
+                key="change-release"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -25 }}
+                className="space-y-6 text-left"
+              >
+                {/* Header Title Section */}
+                <div className="bg-slate-900/40 p-6 rounded-3xl border border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl">
+                      <Sparkles className="w-6 h-6 animate-pulse-subtle" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-black text-white uppercase tracking-tight">Change & Release Tracker</h2>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Deployment packaging, pre-production sign-off audits, synthetic rollback parameters, and retrospective lessons learned.
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      onClick={handleOpenCreateRelease}
+                      className="px-4 py-2 bg-indigo-505 hover:bg-indigo-600 active:scale-95 text-white font-black uppercase text-[10px] tracking-widest rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-indigo-500/10"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Register Release
+                    </button>
+                  </div>
+                </div>
+
+                {/* Statistics Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 select-none">
+                  {/* Total Card */}
+                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-505 uppercase font-black tracking-wider">Total Tracked Releases</span>
+                      <p className="text-3xl font-mono font-black text-white mt-1">{crStats.total}</p>
+                    </div>
+                    <div className="mt-3 text-[10px] text-slate-400 font-medium font-sans">
+                      Across <span className="text-indigo-400 text-xs font-mono">{(PROJECTS_LIST && PROJECTS_LIST.length) || 4}</span> distinct projects
+                    </div>
+                  </div>
+
+                  {/* Success rate Card */}
+                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-emerald-500 uppercase font-black tracking-wider font-sans">Success Release Rate</span>
+                      <p className="text-3xl font-mono font-black text-emerald-400 mt-1">{crStats.successRatio}%</p>
+                    </div>
+                    <div className="mt-3 text-[10px] text-slate-400">
+                      <span className="text-emerald-400 font-mono font-bold">{crStats.successful}</span> successful rollouts completed
+                    </div>
+                  </div>
+
+                  {/* Pre-deployment check Card */}
+                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-sky-400 uppercase font-black tracking-wider font-sans">UAT Met Ratio</span>
+                      <p className="text-3xl font-mono font-black text-sky-450 mt-1">{crStats.uatRatio}%</p>
+                    </div>
+                    <div className="mt-3 text-[10px] text-slate-400">
+                      <span className="text-sky-450 font-mono font-bold">{crStats.uatSignoffs}</span> of <span className="font-mono font-bold text-slate-350">{crStats.total}</span> UAT signs secured
+                    </div>
+                  </div>
+
+                  {/* Failure/Rollback percentage */}
+                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-red-500 uppercase font-black tracking-wider font-sans">Failed / Rolled Back</span>
+                      <p className="text-3xl font-mono font-black text-red-400 mt-1">{crStats.failures}</p>
+                    </div>
+                    <div className="mt-3 text-[10px] text-slate-400">
+                      Rollback coverage rate: <span className="text-red-400 font-mono font-bold">{crStats.rollbackRatio}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Control Panel (Search/Filters) */}
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                  <div className="md:col-span-6 relative">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search releases by WAR/JAR file, purpose, lessons learned..."
+                      value={crSearchQuery}
+                      onChange={e => setCrSearchQuery(e.target.value)}
+                      className="input-field pl-11 text-xs py-2.5"
+                    />
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <select
+                      value={crFilterProject}
+                      onChange={e => setCrFilterProject(e.target.value)}
+                      className="input-field text-xs py-2.5 bg-slate-950"
+                    >
+                      <option value="All">All Projects</option>
+                      {(PROJECTS_LIST.length > 0 ? PROJECTS_LIST : ['HR-Portal', 'E-Commerce', 'Internal-CRM', 'Mobile-App']).map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <select
+                      value={crFilterStatus}
+                      onChange={e => setCrFilterStatus(e.target.value)}
+                      className="input-field text-xs py-2.5 bg-slate-950"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="Scheduled">Scheduled</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Successful">Successful</option>
+                      <option value="Failed">Failed</option>
+                      <option value="Rolled Back">Rolled Back</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Release Lists */}
+                <div className="space-y-4">
+                  {filteredChangeReleases.map(rec => {
+                    const statusColors: Record<string, string> = {
+                      'Successful': 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
+                      'Scheduled': 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400',
+                      'In Progress': 'bg-amber-500/10 border-amber-500/30 text-amber-400',
+                      'Failed': 'bg-red-500/10 border-red-500/30 text-red-400',
+                      'Rolled Back': 'bg-rose-500/10 border-rose-500/30 text-rose-455'
+                    };
+
+                    const formattedDate = () => {
+                      try {
+                        return format(new Date(rec.deploymentDate), 'PPP p');
+                      } catch (e) {
+                        return rec.deploymentDate;
+                      }
+                    };
+
+                    return (
+                      <div
+                        key={rec.id}
+                        className="bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-slate-750 p-6 rounded-3xl transition-all duration-200"
+                      >
+                        <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
+                          <div className="space-y-2 flex-1">
+                            {/* Line 1: ID, Project Badge, Status Badge */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-mono font-black px-2.5 py-1 bg-slate-950/80 border border-slate-800 text-slate-400 rounded-lg select-none">
+                                {rec.id}
+                              </span>
+                              <span className="text-[10px] uppercase font-black px-2.5 py-1 bg-indigo-500/10 text-indigo-400 rounded-lg select-none">
+                                {rec.projectId}
+                              </span>
+                              <span className={cn("text-[9px] uppercase font-black px-2.5 py-1 rounded-lg border select-none", statusColors[rec.status] || 'bg-slate-800 text-slate-300 border-slate-700')}>
+                                {rec.status}
+                              </span>
+                              {rec.rollbackDone && (
+                                <span className="text-[9px] uppercase font-black px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg flex items-center gap-1.5 select-none animate-none">
+                                  <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                                  Rollback Completed
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Line 2: WAR/JAR Name */}
+                            <h3 className="text-xs font-mono font-black text-white flex items-center gap-2 select-all pt-1 text-left">
+                              <span className="text-slate-500 font-sans font-black text-[10px] uppercase tracking-wide select-none">Package File:</span>
+                              {rec.warJarName}
+                            </h3>
+
+                            {/* Line 3: Deployment Purpose */}
+                            <p className="text-xs text-slate-300 font-semibold leading-relaxed pt-1.5 text-left select-text">
+                              <span className="text-slate-500 font-bold uppercase text-[9px] tracking-wider block mb-0.5 select-none animate-none">Purpose / Ref Reference:</span>
+                              {rec.purpose}
+                            </p>
+
+                            {/* Meta field: Date & Registered By */}
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 pt-2 border-t border-slate-800/50 mt-3 text-[10px] font-sans text-slate-405 select-none">
+                              <span className="flex items-center gap-1.5 font-sans">
+                                <Calendar className="w-3.5 h-3.5 text-slate-505 shrink-0" />
+                                <strong className="text-slate-500 uppercase font-black">Target Deployment:</strong> {formattedDate()}
+                              </span>
+                              <span className="flex items-center gap-1.5 font-sans">
+                                <Users className="w-3.5 h-3.5 text-slate-505 shrink-0" />
+                                <strong className="text-slate-505 uppercase font-black">Registered Employee:</strong> {rec.registeredBy}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Pre-deployment Sign-off metrics on right side */}
+                          <div className="bg-slate-950/40 p-4 border border-slate-800/80 rounded-2xl w-full lg:w-72 shrink-0 space-y-3 select-none text-left">
+                            <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block border-b border-slate-850 pb-1.5 mb-1 text-center font-sans font-bold">
+                              Process Sign-off Auditing
+                            </span>
+                            
+                            <div className="flex items-center justify-between text-[11px] font-sans">
+                              <span className="text-slate-400 font-semibold">Deployment Sign-off</span>
+                              {rec.hasDeploymentSignoff ? (
+                                <span className="text-emerald-400 font-bold uppercase text-[10px] flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                  MET
+                                </span>
+                              ) : (
+                                <span className="text-red-400 font-bold uppercase text-[10px] flex items-center gap-1.5">
+                                  <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                  MISSING
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] font-sans">
+                              <span className="text-slate-400 font-semibold">UAT Sign-off Verified</span>
+                              {rec.hasUatSignoff ? (
+                                <span className="text-emerald-400 font-bold uppercase text-[10px] flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                  MET
+                                </span>
+                              ) : (
+                                <span className="text-red-400 font-bold uppercase text-[10px] flex items-center gap-1.5">
+                                  <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                  MISSING
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] font-sans">
+                              <span className="text-slate-400 font-semibold">Doc Review & Sign-off</span>
+                              {rec.hasDocReviewSignoff ? (
+                                <span className="text-emerald-400 font-bold uppercase text-[10px] flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                  MET
+                                </span>
+                              ) : (
+                                <span className="text-red-400 font-bold uppercase text-[10px] flex items-center gap-1.5">
+                                  <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                  MISSING
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Extra failure / Retrospectives conditional views */}
+                        {(rec.failureReason || rec.lessonsLearned || rec.notes) && (
+                          <div className="mt-4 pt-4 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {rec.failureReason && (
+                              <div className="p-3 bg-red-950/20 rounded-2xl border border-red-900/20 text-xs text-left">
+                                <span className="text-red-400 font-black uppercase text-[10px] flex items-center gap-1 mb-1">
+                                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                  Failure retrospective rationale
+                                </span>
+                                <p className="text-slate-305 font-medium leading-relaxed font-mono text-[11px]">
+                                  {rec.failureReason}
+                                </p>
+                              </div>
+                            )}
+
+                            {rec.lessonsLearned && (
+                              <div className="p-3 bg-violet-950/10 rounded-2xl border border-violet-900/20 text-xs text-left">
+                                <span className="text-violet-400 font-black uppercase text-[10px] flex items-center gap-1.5 mb-1 animate-none">
+                                  <Info className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                                  Retrospective lessons learned
+                                </span>
+                                <p className="text-slate-300 font-semibold italic leading-relaxed">
+                                  "{rec.lessonsLearned}"
+                                </p>
+                              </div>
+                            )}
+
+                            {!rec.lessonsLearned && !rec.failureReason && rec.notes && (
+                              <div className="p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-xs md:col-span-2 text-left">
+                                <span className="text-slate-400 font-black uppercase text-[10px] block mb-1">
+                                  Deployment Execution Notes
+                                </span>
+                                <p className="text-slate-400 font-medium leading-relaxed">
+                                  {rec.notes}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Record Edit/Delete Controls */}
+                        <div className="mt-4 pt-3 border-t border-slate-800/40 flex justify-end gap-2 shrink-0 select-none">
+                          <button
+                            onClick={() => handleOpenEditRelease(rec)}
+                            className="p-1.5 px-3 bg-slate-850 hover:bg-slate-800 hover:text-white rounded-xl text-slate-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            Edit Release
+                          </button>
+                          <button
+                            onClick={() => handleDeleteReleaseRecord(rec.id)}
+                            className="p-1.5 px-3 bg-red-950/10 hover:bg-red-900/20 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {filteredChangeReleases.length === 0 && (
+                    <div className="py-20 text-center border-2 border-dashed border-slate-800 rounded-3xl select-none">
+                      <Sparkles className="w-8 h-8 text-slate-705 mx-auto mb-3" />
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">No matching release records found</p>
+                      <p className="text-[10px] text-slate-600 uppercase font-black mt-1">Try resetting your category or query filters</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Interactive Form Dialog/Modal for Registering or Updating Release records */}
+          <AnimatePresence>
+            {isChangeReleaseModalOpen && (
+              <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-fade-in">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                  className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-left"
+                >
+                  <div className="p-6 border-b border-slate-850 flex items-center justify-between select-none">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400">
+                        <Sparkles className="w-5 h-5 animate-pulse-subtle" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                          {editingReleaseRecord ? `Edit Release Record (${editingReleaseRecord.id})` : 'Register Change & Release Record'}
+                        </h3>
+                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+                          Consolidated internal workflow process tracking
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setIsChangeReleaseModalOpen(false);
+                        setEditingReleaseRecord(null);
+                      }}
+                      className="p-2 hover:bg-slate-850 rounded-xl text-slate-500 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveReleaseRecord} className="flex-1 overflow-y-auto p-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Project Field */}
+                      <div>
+                        <label className="label-sm">Associated Project Config *</label>
+                        <select
+                          className="input-field py-2 text-xs bg-slate-950"
+                          value={crFormProjectId}
+                          onChange={e => setCrFormProjectId(e.target.value)}
+                          required
+                        >
+                          {(PROJECTS_LIST.length > 0 ? PROJECTS_LIST : ['HR-Portal', 'E-Commerce', 'Internal-CRM', 'Mobile-App']).map(p => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Package Name field */}
+                      <div>
+                        <label className="label-sm">Deployment WAR/JAR/Package Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. login-module-v1.4.jar"
+                          className="input-field text-xs text-slate-100 font-mono"
+                          value={crFormWarJarName}
+                          onChange={e => setCrFormWarJarName(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Purpose / Incident Code / APOM */}
+                    <div>
+                      <label className="label-sm">Purpose / Incident / APOM ID *</label>
+                      <textarea
+                        required
+                        placeholder="Describe target reasons, incidents linked or specific features deployed..."
+                        className="input-field min-h-[60px] text-xs"
+                        value={crFormPurpose}
+                        onChange={e => setCrFormPurpose(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Target deployment Date/Time */}
+                      <div>
+                        <label className="label-sm">Deployment Execution Date/Time *</label>
+                        <input
+                          type="datetime-local"
+                          required
+                          className="input-field text-xs"
+                          value={crFormDeploymentDate}
+                          onChange={e => setCrFormDeploymentDate(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Status select field */}
+                      <div>
+                        <label className="label-sm">Rollout Status *</label>
+                        <select
+                          className="input-field text-xs bg-slate-955"
+                          value={crFormStatus}
+                          onChange={e => {
+                            setCrFormStatus(e.target.value);
+                            if (e.target.value !== 'Failed' && e.target.value !== 'Rolled Back') {
+                              setCrFormRollbackDone(false);
+                              setCrFormFailureReason('');
+                            }
+                          }}
+                        >
+                          <option value="Scheduled">Scheduled</option>
+                          <option value="In Progress">In Progress</option>
+                          <option value="Successful">Successful</option>
+                          <option value="Failed">Failed</option>
+                          <option value="Rolled Back">Rolled Back</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Checklist boxes */}
+                    <div className="bg-slate-950/45 p-4 rounded-2xl border border-slate-800/80 space-y-3">
+                      <span className="text-[10px] text-slate-500 uppercase font-black tracking-wider block border-b border-slate-850 pb-1.5 select-none">
+                        Pre-Deployment Checklist Auditing
+                      </span>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-800 bg-slate-850 text-indigo-500 focus:ring-indigo-500/20"
+                            checked={crFormHasDeploymentSignoff}
+                            onChange={e => setCrFormHasDeploymentSignoff(e.target.checked)}
+                          />
+                          <span className="text-[11px] text-slate-350 font-bold uppercase tracking-wide">Deployment Sign-Off</span>
+                        </label>
+
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-805 bg-slate-850 text-indigo-505 focus:ring-indigo-500/20"
+                            checked={crFormHasUatSignoff}
+                            onChange={e => setCrFormHasUatSignoff(e.target.checked)}
+                          />
+                          <span className="text-[11px] text-slate-355 font-bold uppercase tracking-wide">UAT Sign-Off Verified</span>
+                        </label>
+
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-800 bg-slate-850 text-indigo-500 focus:ring-indigo-500/20"
+                            checked={crFormHasDocReviewSignoff}
+                            onChange={e => setCrFormHasDocReviewSignoff(e.target.checked)}
+                          />
+                          <span className="text-[11px] text-slate-350 font-bold uppercase tracking-wide">Doc Review Sign-Off</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Failure details (only visible if status is Failed or Rolled Back) */}
+                    {(crFormStatus === 'Failed' || crFormStatus === 'Rolled Back') && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="p-4 bg-red-955/10 border border-red-900/30 rounded-2xl space-y-3"
+                      >
+                        <div>
+                          <label className="label-sm text-red-400">Retrospective Failure Reason *</label>
+                          <textarea
+                            required
+                            placeholder="Provide detail on why the deployment failed or experienced latency / exceptions..."
+                            className="input-field text-xs bg-slate-950/20"
+                            value={crFormFailureReason}
+                            onChange={e => setCrFormFailureReason(e.target.value)}
+                          />
+                        </div>
+
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-800 bg-slate-850 text-red-500 focus:ring-red-500/20"
+                            checked={crFormRollbackDone}
+                            onChange={e => setCrFormRollbackDone(e.target.checked)}
+                          />
+                          <span className="text-[11px] text-red-400 font-black uppercase tracking-wider">Rollback Procedure Completed Successfully</span>
+                        </label>
+                      </motion.div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Lessons learned */}
+                      <div>
+                        <label className="label-sm">Lessons Learned (Retrospective)</label>
+                        <textarea
+                          placeholder="e.g. Always schedule staging validation lock 48h before release..."
+                          className="input-field min-h-[60px] text-xs"
+                          value={crFormLessonsLearned}
+                          onChange={e => setCrFormLessonsLearned(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Execution Notes */}
+                      <div>
+                        <label className="label-sm">Additional Execution Notes</label>
+                        <textarea
+                          placeholder="Include rollback command syntax, port mappings, or validation URIs..."
+                          className="input-field min-h-[60px] text-xs"
+                          value={crFormNotes}
+                          onChange={e => setCrFormNotes(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="pt-4 border-t border-slate-850 flex justify-end gap-3 select-none">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsChangeReleaseModalOpen(false);
+                          setEditingReleaseRecord(null);
+                        }}
+                        className="px-4 py-2 bg-slate-805 hover:bg-slate-750 text-slate-300 font-black uppercase text-[10px] tracking-widest rounded-xl transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white font-black uppercase text-[10px] tracking-widest rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Save className="w-4 h-4" />
+                        Save Record
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </div>
             )}
           </AnimatePresence>
 
