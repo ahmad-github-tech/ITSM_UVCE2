@@ -9,10 +9,10 @@
 		<relativePath/>
 	</parent>
 	<groupId>com.supportflow</groupId>
-	<artifactId>support-flow-app</artifactId>
+	<artifactId>UVCE-Java-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<packaging>war</packaging>
-	<name>SupportFlow IT Support</name>
+	<name>UVCE-Java-backend</name>
 	<description>IT Support Task Management System</description>
 
 	<properties>
