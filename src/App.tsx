@@ -2655,6 +2655,14 @@ Guidelines:
     );
   };
 
+  const visibleProductivityData = useMemo(() => {
+    if (isManagerOrAdmin) {
+      return charts.resourceProductivity;
+    }
+    const currentEmpName = currentLoggedInUserObj?.name || currentUser || '';
+    return charts.resourceProductivity.filter(item => item.name.toLowerCase() === currentEmpName.toLowerCase());
+  }, [charts.resourceProductivity, isManagerOrAdmin, currentLoggedInUserObj, currentUser]);
+
   if (!isLoggedIn) {
     const activeTasksCount = (proj: string, prio: Priority) => {
       return tasks.filter(t => 
@@ -3291,14 +3299,6 @@ Guidelines:
       </div>
     );
   }
-
-  const visibleProductivityData = useMemo(() => {
-    if (isManagerOrAdmin) {
-      return charts.resourceProductivity;
-    }
-    const currentEmpName = currentLoggedInUserObj?.name || currentUser || '';
-    return charts.resourceProductivity.filter(item => item.name.toLowerCase() === currentEmpName.toLowerCase());
-  }, [charts.resourceProductivity, isManagerOrAdmin, currentLoggedInUserObj, currentUser]);
 
   const handleDrilldown = (type: string, param?: any) => {
     const nowStr = new Date().toISOString();
