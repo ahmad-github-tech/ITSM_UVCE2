@@ -407,6 +407,13 @@ export default function App() {
   const [metricsDetailModalOpen, setMetricsDetailModalOpen] = useState(false);
   const [metricsDetailProject, setMetricsDetailProject] = useState('All');
 
+  // Drilldown modal states
+  const [drilldownModalOpen, setDrilldownModalOpen] = useState(false);
+  const [drilldownTitle, setDrilldownTitle] = useState('');
+  const [drilldownDescription, setDrilldownDescription] = useState('');
+  const [drilldownTickets, setDrilldownTickets] = useState<SupportTask[]>([]);
+  const [drilldownSearch, setDrilldownSearch] = useState('');
+
   const handleLoginSubmit = async (e?: React.FormEvent, customId?: string, customPassword?: string) => {
     if (e) e.preventDefault();
     setLoginError('');
@@ -1853,6 +1860,7 @@ export default function App() {
       consumptionData, 
       trendData,
       resourceProductivity,
+      distributionTasks,
       slaMetrics: {
         responseCompliance: responseSlaCompliance,
         resolutionCompliance: resolutionSlaCompliance,
@@ -3292,6 +3300,133 @@ Guidelines:
     return charts.resourceProductivity.filter(item => item.name.toLowerCase() === currentEmpName.toLowerCase());
   }, [charts.resourceProductivity, isManagerOrAdmin, currentLoggedInUserObj, currentUser]);
 
+  const handleDrilldown = (type: string, param?: any) => {
+    const nowStr = new Date().toISOString();
+    let filteredList: SupportTask[] = [];
+    let title = '';
+    let desc = '';
+
+    const baseTasks = charts.distributionTasks || [];
+
+    switch (type) {
+      case 'mtta_all':
+        filteredList = baseTasks;
+        title = "Response Performance (MTTA) Details";
+        desc = "Full list of tickets evaluating response SLA and acknowledgment times.";
+        break;
+      case 'mttr_all':
+        filteredList = baseTasks;
+        title = "Resolution Performance (MTTR) Details";
+        desc = "Full list of tickets evaluating resolution SLA and total elapsed active fixing times.";
+        break;
+      case 'mtta_met':
+        filteredList = baseTasks.filter(t => !getTaskSlaTimes(t, nowStr).isResponseBreached);
+        title = "Response SLA (MTTA) - MET";
+        desc = "Tickets acknowledged within response SLA target times for their respective priority levels.";
+        break;
+      case 'mtta_breached':
+        filteredList = baseTasks.filter(t => getTaskSlaTimes(t, nowStr).isResponseBreached);
+        title = "Response SLA (MTTA) - BREACHED";
+        desc = "Tickets that missed target acknowledgment times based on priority and shift timings.";
+        break;
+      case 'mttr_met':
+        filteredList = baseTasks.filter(t => !getTaskSlaTimes(t, nowStr).isResolutionBreached);
+        title = "Resolution SLA (MTTR) - MET";
+        desc = "Tickets resolved within required SLAs during this timeframe.";
+        break;
+      case 'mttr_breached':
+        filteredList = baseTasks.filter(t => getTaskSlaTimes(t, nowStr).isResolutionBreached);
+        title = "Resolution SLA (MTTR) - BREACHED";
+        desc = "Tickets whose business and active resolving focus took longer than set resolution SLAs.";
+        break;
+      case 'risk_critical':
+        filteredList = baseTasks.filter(t => {
+          const isOpen = t.status !== 'Closed' && t.status !== 'Resolved';
+          const sla = getTaskSlaTimes(t, nowStr);
+          return isOpen && sla.isResolutionBreached;
+        });
+        title = "Breached / SLA Critical Risk";
+        desc = "Active tickets currently breached and requiring emergency manager resolution.";
+        break;
+      case 'risk_high':
+        filteredList = baseTasks.filter(t => {
+          const isOpen = t.status !== 'Closed' && t.status !== 'Resolved';
+          const sla = getTaskSlaTimes(t, nowStr);
+          const ratio = sla.resolutionTimeMin / (sla.resolutionLimitMin || 1);
+          return isOpen && !sla.isResolutionBreached && ratio >= 0.8;
+        });
+        title = "High Risk Level Tickets";
+        desc = "Active tickets approaching SLA threshold with >= 80% of resolution hours elapsed.";
+        break;
+      case 'risk_medium':
+        filteredList = baseTasks.filter(t => {
+          const isOpen = t.status !== 'Closed' && t.status !== 'Resolved';
+          const sla = getTaskSlaTimes(t, nowStr);
+          const ratio = sla.resolutionTimeMin / (sla.resolutionLimitMin || 1);
+          return isOpen && !sla.isResolutionBreached && ratio >= 0.5 && ratio < 0.8;
+        });
+        title = "Moderate Risk Tickets";
+        desc = "Active tickets having consumed 50% to 80% of allowed resolution SLA.";
+        break;
+      case 'risk_low':
+        filteredList = baseTasks.filter(t => {
+          const isOpen = t.status !== 'Closed' && t.status !== 'Resolved';
+          const sla = getTaskSlaTimes(t, nowStr);
+          const ratio = sla.resolutionTimeMin / (sla.resolutionLimitMin || 1);
+          return isOpen && !sla.isResolutionBreached && ratio < 0.5;
+        });
+        title = "Safe / Stable Workload";
+        desc = "Active open tickets with < 50% of resolution SLA time elapsed.";
+        break;
+      case 'priority':
+        filteredList = baseTasks.filter(t => t.priority === param);
+        title = `Priority Category: ${param}`;
+        desc = `All incidents in current view with ${param} criticality level.`;
+        break;
+      case 'level':
+        filteredList = baseTasks.filter(t => t.supportLevel === param);
+        title = `Support Tier: ${param}`;
+        desc = `All incidents logged under Support Layer ${param} handling tier.`;
+        break;
+      case 'resource_assigned':
+        filteredList = baseTasks.filter(t => t.assignedTo === param);
+        title = `${param} - Total Assigned Workload`;
+        desc = `Full roster of incidents of ${param} during the report period.`;
+        break;
+      case 'resource_resolved':
+        filteredList = baseTasks.filter(t => t.assignedTo === param && (t.status === 'Resolved' || t.status === 'Closed'));
+        title = `${param} - Resolved & Closed Tickets`;
+        desc = `Incidents resolved or verified and closed by ${param} in this window.`;
+        break;
+      case 'resource_active':
+        filteredList = baseTasks.filter(t => t.assignedTo === param && t.status !== 'Resolved' && t.status !== 'Closed');
+        title = `${param} - Active Responsibility`;
+        desc = `Active open, in-progress, or on-hold ticket backlog assigned to ${param}.`;
+        break;
+      case 'resource_priority':
+        filteredList = baseTasks.filter(t => t.assignedTo === param.name && t.priority === param.priority);
+        title = `${param.name} - ${param.priority} Incidents`;
+        desc = `All ${param.priority} priority tickets matching workload assignations for ${param.name}.`;
+        break;
+      case 'resource_total':
+        filteredList = baseTasks.filter(t => t.assignedTo === param);
+        title = `${param} - Overall Performance Data`;
+        desc = `Consolidated performance and effort metrics for resource ${param}.`;
+        break;
+      default:
+        filteredList = baseTasks;
+        title = "Period Analytics Breakdown";
+        desc = "Complete set of tickets matching current filters and dates.";
+        break;
+    }
+
+    setDrilldownTickets(filteredList);
+    setDrilldownTitle(title);
+    setDrilldownDescription(desc);
+    setDrilldownSearch('');
+    setDrilldownModalOpen(true);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden text-slate-200">
       {/* Sidebar Form */}
@@ -3971,77 +4106,85 @@ Guidelines:
                     {/* Real-time SLA Acknowledgment, Resolution Gauges, and Breach Risk Panel */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   
-                  {/* Response SLA (MTTA) Gauge Card */}
-                  <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl relative overflow-hidden backdrop-blur-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Response SLA (MTTA)</h4>
-                        <p className="text-[9px] text-slate-500 uppercase font-bold mt-0.5 block leading-none">Mean Time To Acknowledge</p>
-                      </div>
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                        <Clock className="w-4 h-4 text-emerald-400" />
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-6">
-                      <ComplianceGauge 
-                        percentage={charts.slaMetrics.responseCompliance} 
-                        colorClass="stroke-emerald-500 shadow-emerald-500/20"
-                        size={92} 
-                        strokeWidth={8}
-                        label="RESP SLA"
-                      />
-                      <div className="space-y-2 flex-grow">
-                        <div>
-                          <span className="text-[9px] text-slate-500 uppercase font-bold block tracking-wider leading-none">Avg MTTA</span>
-                          <span className="text-xl font-mono font-black text-white leading-none">
-                            {formatDuration(charts.slaMetrics.mtta * 60000) || '0m'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[8px] text-slate-400 font-bold block bg-slate-950/60 border border-slate-800 rounded px-2 py-1 text-center mt-1">
-                            Target: 2h avg
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Resolution SLA (MTTR) Gauge Card */}
-                  <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl relative overflow-hidden backdrop-blur-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Resolution SLA (MTTR)</h4>
-                        <p className="text-[9px] text-slate-500 uppercase font-bold mt-0.5 block leading-none">Mean Time To Resolve</p>
-                      </div>
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                        <Activity className="w-4 h-4 text-indigo-400" />
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-6">
-                      <ComplianceGauge 
-                        percentage={charts.slaMetrics.resolutionCompliance} 
-                        colorClass="stroke-indigo-500 shadow-indigo-500/20"
-                        size={92} 
-                        strokeWidth={8}
-                        label="RESO SLA"
-                      />
-                      <div className="space-y-2 flex-grow">
-                        <div>
-                          <span className="text-[9px] text-slate-500 uppercase font-bold block tracking-wider leading-none">Avg MTTR</span>
-                          <span className="text-xl font-mono font-black text-white leading-none">
-                            {formatDuration(charts.slaMetrics.mttr * 60000) || '0m'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[8px] text-slate-400 font-bold block bg-slate-950/60 border border-slate-800 rounded px-2 py-1 text-center mt-1">
-                            Target: 24h avg
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                   {/* Response SLA (MTTA) Gauge Card */}
+                   <div 
+                     onClick={() => handleDrilldown('mtta_all')}
+                     className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl relative overflow-hidden backdrop-blur-sm cursor-pointer hover:border-emerald-500/30 hover:bg-slate-900/60 transition-all duration-300 group"
+                     title="Click to drill down into response SLA ticket statistics"
+                   >
+                     <div className="flex items-center justify-between mb-4">
+                       <div>
+                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-emerald-400 transition-colors">Response SLA (MTTA)</h4>
+                         <p className="text-[9px] text-slate-500 uppercase font-bold mt-0.5 block leading-none">Mean Time To Acknowledge</p>
+                       </div>
+                       <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:scale-105 transition-transform">
+                         <Clock className="w-4 h-4 text-emerald-400" />
+                       </div>
+                     </div>
+                     
+                     <div className="flex items-center gap-6">
+                       <ComplianceGauge 
+                         percentage={charts.slaMetrics.responseCompliance} 
+                         colorClass="stroke-emerald-500 shadow-emerald-500/20"
+                         size={92} 
+                         strokeWidth={8}
+                         label="RESP SLA"
+                       />
+                       <div className="space-y-2 flex-grow">
+                         <div>
+                           <span className="text-[9px] text-slate-500 uppercase font-bold block tracking-wider leading-none">Avg MTTA</span>
+                           <span className="text-xl font-mono font-black text-white leading-none">
+                             {formatDuration(charts.slaMetrics.mtta * 60000) || '0m'}
+                           </span>
+                         </div>
+                         <div>
+                           <span className="text-[8px] text-slate-400 font-bold block bg-slate-950/60 border border-slate-800 rounded px-2 py-1 text-center mt-1">
+                             Target: 2h avg
+                           </span>
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+ 
+                   {/* Resolution SLA (MTTR) Gauge Card */}
+                   <div 
+                     onClick={() => handleDrilldown('mttr_all')}
+                     className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl relative overflow-hidden backdrop-blur-sm cursor-pointer hover:border-indigo-500/30 hover:bg-slate-900/60 transition-all duration-300 group"
+                     title="Click to drill down into resolution SLA ticket statistics"
+                   >
+                     <div className="flex items-center justify-between mb-4">
+                       <div>
+                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-400 transition-colors">Resolution SLA (MTTR)</h4>
+                         <p className="text-[9px] text-slate-500 uppercase font-bold mt-0.5 block leading-none">Mean Time To Resolve</p>
+                       </div>
+                       <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center group-hover:scale-105 transition-transform">
+                         <Activity className="w-4 h-4 text-indigo-400" />
+                       </div>
+                     </div>
+                     
+                     <div className="flex items-center gap-6">
+                       <ComplianceGauge 
+                         percentage={charts.slaMetrics.resolutionCompliance} 
+                         colorClass="stroke-indigo-500 shadow-indigo-500/20"
+                         size={92} 
+                         strokeWidth={8}
+                         label="RESO SLA"
+                       />
+                       <div className="space-y-2 flex-grow">
+                         <div>
+                           <span className="text-[9px] text-slate-500 uppercase font-bold block tracking-wider leading-none">Avg MTTR</span>
+                           <span className="text-xl font-mono font-black text-white leading-none">
+                             {formatDuration(charts.slaMetrics.mttr * 60000) || '0m'}
+                           </span>
+                         </div>
+                         <div>
+                           <span className="text-[8px] text-slate-400 font-bold block bg-slate-950/60 border border-slate-800 rounded px-2 py-1 text-center mt-1">
+                             Target: 24h avg
+                           </span>
+                         </div>
+                       </div>
+                     </div>
+                   </div>
 
                   {/* Breach Risk Intensity Status Card */}
                   <div className={cn(
@@ -4083,22 +4226,38 @@ Guidelines:
                     </div>
 
                     <div className="grid grid-cols-4 gap-1 text-[9px] text-slate-400 font-mono">
-                      <div className="flex flex-col items-center p-1 bg-slate-950/40 rounded border border-slate-900">
+                      <div 
+                        onClick={() => handleDrilldown('risk_critical')}
+                        className="flex flex-col items-center p-1 bg-slate-950/40 rounded border border-slate-900 cursor-pointer hover:bg-rose-500/10 hover:border-rose-500/30 transition-all text-center"
+                        title="Click to view breached active tickets"
+                      >
                         <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mb-1" />
                         <span className="font-extrabold text-white text-[11px]">{charts.slaMetrics.riskCritical}</span>
                         <span className="text-[7px] text-slate-500 tracking-tighter">BREACHED</span>
                       </div>
-                      <div className="flex flex-col items-center p-1 bg-slate-950/40 rounded border border-slate-900">
+                      <div 
+                        onClick={() => handleDrilldown('risk_high')}
+                        className="flex flex-col items-center p-1 bg-slate-950/40 rounded border border-slate-900 cursor-pointer hover:bg-orange-500/10 hover:border-orange-500/30 transition-all text-center"
+                        title="Click to view High risk active open tickets"
+                      >
                         <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mb-1" />
                         <span className="font-extrabold text-white text-[11px]">{charts.slaMetrics.riskHigh}</span>
                         <span className="text-[7px] text-slate-500 tracking-tighter">HIGH</span>
                       </div>
-                      <div className="flex flex-col items-center p-1 bg-slate-950/40 rounded border border-slate-900">
+                      <div 
+                        onClick={() => handleDrilldown('risk_medium')}
+                        className="flex flex-col items-center p-1 bg-slate-950/40 rounded border border-slate-900 cursor-pointer hover:bg-amber-500/10 hover:border-amber-500/30 transition-all text-center"
+                        title="Click to view Moderate risk active open tickets"
+                      >
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mb-1" />
                         <span className="font-extrabold text-white text-[11px]">{charts.slaMetrics.riskMedium}</span>
                         <span className="text-[7px] text-slate-500 tracking-tighter">MODERATE</span>
                       </div>
-                      <div className="flex flex-col items-center p-1 bg-slate-950/40 rounded border border-slate-900">
+                      <div 
+                        onClick={() => handleDrilldown('risk_low')}
+                        className="flex flex-col items-center p-1 bg-slate-950/40 rounded border border-slate-900 cursor-pointer hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all text-center"
+                        title="Click to view Safe/Stable active open tickets"
+                      >
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mb-1" />
                         <span className="font-extrabold text-white text-[11px]">{charts.slaMetrics.riskLow}</span>
                         <span className="text-[7px] text-slate-500 tracking-tighter">SAFE</span>
@@ -4458,23 +4617,34 @@ Guidelines:
                               }
 
                               return tableData.map((res) => (
-                                <tr key={res.name} className="hover:bg-slate-900/30 transition-colors">
-                                  <td className="px-6 py-4 text-left font-black text-white flex items-center gap-2">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center font-bold text-[10px] uppercase">
+                                <tr key={res.name} className="hover:bg-slate-900/20 transition-colors border-b border-slate-850">
+                                  <td 
+                                    onClick={() => handleDrilldown('resource_assigned', res.name)}
+                                    className="px-6 py-4 text-left font-black text-white flex items-center gap-2 cursor-pointer group hover:opacity-80 transition-opacity"
+                                  >
+                                    <div className="w-6 h-6 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center font-bold text-[10px] uppercase group-hover:scale-110 transition-transform">
                                       {res.name.substring(0, 2)}
                                     </div>
                                     <div>
-                                      <p className="leading-none">{res.name}</p>
+                                      <p className="leading-none group-hover:text-indigo-300 transition-colors">{res.name}</p>
                                       <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">IT SUPPORT TEAM</p>
                                     </div>
                                   </td>
-                                  <td className="px-6 py-4 text-center font-mono font-bold text-slate-300">
+                                  <td 
+                                    onClick={() => handleDrilldown('resource_assigned', res.name)}
+                                    className="px-6 py-4 text-center font-mono font-bold text-slate-300 cursor-pointer hover:bg-indigo-500/5 transition-all"
+                                    title="Click to view all assigned tickets"
+                                  >
                                     {res.assignedCount}
                                   </td>
-                                  <td className="px-6 py-4 text-center">
+                                  <td 
+                                    onClick={() => handleDrilldown('resource_resolved', res.name)}
+                                    className="px-6 py-4 text-center cursor-pointer hover:bg-emerald-500/5 transition-all"
+                                    title="Click to view resolved tickets"
+                                  >
                                     <div className="flex flex-col items-center">
                                       <span className="font-mono font-black text-emerald-400">{res.resolvedCount}</span>
-                                      <span className="text-[9px] text-slate-500 font-bold">({Math.round((res.resolvedCount / res.assignedCount) * 100)}%)</span>
+                                      <span className="text-[9px] text-slate-500 font-bold">({res.assignedCount > 0 ? Math.round((res.resolvedCount / res.assignedCount) * 100) : 0}%)</span>
                                     </div>
                                   </td>
                                   <td className="px-6 py-4 text-center font-mono font-bold text-slate-400">
@@ -4486,40 +4656,60 @@ Guidelines:
                                   </td>
                                   
                                   {/* P1 effort */}
-                                  <td className="px-6 py-4 text-center">
+                                  <td 
+                                    onClick={() => handleDrilldown('resource_priority', { name: res.name, priority: 'P1' })}
+                                    className="px-6 py-4 text-center cursor-pointer hover:bg-rose-500/10 transition-all border-l border-slate-900/40"
+                                    title="Click to view P1 effort details"
+                                  >
                                     <div className="flex flex-col items-center">
                                       <span className="font-mono text-slate-300">{res.p1Count} tkts</span>
-                                      <span className="text-[10px] text-rose-400 font-black font-mono">{res.p1Hours}h</span>
+                                      <span className="text-[10px] text-rose-400 font-black font-mono bg-rose-500/5 px-1.5 py-0.5 rounded mt-0.5">{res.p1Hours}h</span>
                                     </div>
                                   </td>
                                   
                                   {/* P2 effort */}
-                                  <td className="px-6 py-4 text-center">
+                                  <td 
+                                    onClick={() => handleDrilldown('resource_priority', { name: res.name, priority: 'P2' })}
+                                    className="px-6 py-4 text-center cursor-pointer hover:bg-orange-500/10 transition-all"
+                                    title="Click to view P2 effort details"
+                                  >
                                     <div className="flex flex-col items-center">
                                       <span className="font-mono text-slate-300">{res.p2Count} tkts</span>
-                                      <span className="text-[10px] text-orange-400 font-black font-mono">{res.p2Hours}h</span>
+                                      <span className="text-[10px] text-orange-400 font-black font-mono bg-orange-500/5 px-1.5 py-0.5 rounded mt-0.5">{res.p2Hours}h</span>
                                     </div>
                                   </td>
                                   
                                   {/* P3 effort */}
-                                  <td className="px-6 py-4 text-center">
+                                  <td 
+                                    onClick={() => handleDrilldown('resource_priority', { name: res.name, priority: 'P3' })}
+                                    className="px-6 py-4 text-center cursor-pointer hover:bg-blue-500/10 transition-all"
+                                    title="Click to view P3 effort details"
+                                  >
                                     <div className="flex flex-col items-center">
                                       <span className="font-mono text-slate-300">{res.p3Count} tkts</span>
-                                      <span className="text-[10px] text-blue-400 font-black font-mono">{res.p3Hours}h</span>
+                                      <span className="text-[10px] text-blue-400 font-black font-mono bg-blue-500/5 px-1.5 py-0.5 rounded mt-0.5">{res.p3Hours}h</span>
                                     </div>
                                   </td>
                                   
                                   {/* P4 effort */}
-                                  <td className="px-6 py-4 text-center">
+                                  <td 
+                                    onClick={() => handleDrilldown('resource_priority', { name: res.name, priority: 'P4' })}
+                                    className="px-6 py-4 text-center cursor-pointer hover:bg-emerald-500/10 transition-all border-r border-slate-900/40"
+                                    title="Click to view P4 effort details"
+                                  >
                                     <div className="flex flex-col items-center">
                                       <span className="font-mono text-slate-300">{res.p4Count} tkts</span>
-                                      <span className="text-[10px] text-emerald-400 font-black font-mono">{res.p4Hours}h</span>
+                                      <span className="text-[10px] text-emerald-400 font-black font-mono bg-emerald-500/5 px-1.5 py-0.5 rounded mt-0.5">{res.p4Hours}h</span>
                                     </div>
                                   </td>
-
+                                  
                                   {/* Total effort spent */}
-                                  <td className="px-6 py-4 text-center mr-2">
-                                    <div className="inline-block px-3 py-1 bg-violet-500/10 border border-violet-500/15 rounded-lg text-violet-400 font-black font-mono text-[13px]">
+                                  <td 
+                                    onClick={() => handleDrilldown('resource_total', res.name)}
+                                    className="px-6 py-4 text-center mr-2 cursor-pointer hover:opacity-80 active:scale-95 transition-all"
+                                    title="Click to view complete performance details"
+                                  >
+                                    <div className="inline-block px-3 py-1 bg-violet-500/10 border border-violet-500/20 rounded-lg text-violet-400 font-black font-mono text-[13px] shadow shadow-violet-500/5">
                                       {res.totalHours}h
                                     </div>
                                   </td>
@@ -7484,6 +7674,221 @@ Guidelines:
                       )}
                     >
                       {confirmModal.confirmLabel}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {drilldownModalOpen && (
+              <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-fade-in">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 30 }}
+                  transition={{ type: "spring", duration: 0.4 }}
+                  className="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-3xl shadow-3xl flex flex-col max-h-[85vh] overflow-hidden backdrop-blur-xl"
+                >
+                  {/* Modal Header */}
+                  <div className="p-6 border-b border-slate-800 bg-slate-900/60 flex items-start justify-between min-h-[90px]">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[10px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                          Metric Analytics Drilldown
+                        </span>
+                        <span className="text-[10px] bg-slate-950 border border-slate-800 text-slate-400 font-mono px-2 py-0.5 rounded-full">
+                          {drilldownTickets.length} Associated Tickets
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                        {drilldownTitle}
+                      </h3>
+                      <p className="text-xs text-slate-400 font-medium leading-normal mt-0.5 max-w-3xl">
+                        {drilldownDescription}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setDrilldownModalOpen(false)}
+                      className="p-1 rounded-xl hover:bg-slate-850 text-slate-400 hover:text-white transition-all duration-250 mt-1"
+                    >
+                      <X className="w-5.5 h-5.5" />
+                    </button>
+                  </div>
+
+                  {/* Smart Filters and Search Bar */}
+                  <div className="bg-slate-950/40 border-b border-slate-850 px-6 py-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                    <div className="relative w-full sm:max-w-md">
+                      <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Search tickets by ID, assignee, subject, or severity..."
+                        value={drilldownSearch}
+                        onChange={(e) => setDrilldownSearch(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800/85 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-bold transition-all"
+                      />
+                      {drilldownSearch && (
+                        <button 
+                          onClick={() => setDrilldownSearch('')}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-550 hover:text-white uppercase font-black tracking-wider transition-colors"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="hidden sm:flex items-center gap-2 select-none">
+                      <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest whitespace-nowrap">Filter Status:</span>
+                      <div className="flex gap-1.5 bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+                        <span className="text-[9px] text-indigo-400 font-black px-2 py-1 bg-indigo-500/5 border border-indigo-500/10 rounded uppercase">Active View Filters Applied</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Table area */}
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                    {(() => {
+                      const filteredAndSearchList = drilldownTickets.filter(task => {
+                        if (!drilldownSearch) return true;
+                        const term = drilldownSearch.toLowerCase();
+                        return (
+                          task.ticketId?.toLowerCase().includes(term) ||
+                          task.assignedTo?.toLowerCase().includes(term) ||
+                          task.priority?.toLowerCase().includes(term) ||
+                          task.supportLevel?.toLowerCase().includes(term) ||
+                          task.description?.toLowerCase().includes(term) ||
+                          task.id?.toLowerCase().includes(term)
+                        );
+                      });
+
+                      if (filteredAndSearchList.length === 0) {
+                        return (
+                          <div className="text-center py-16 text-slate-500 bg-slate-950/20 border border-slate-850 border-dashed rounded-2xl flex flex-col items-center justify-center">
+                            <Activity className="w-10 h-10 text-slate-700 mb-2 animate-pulse" />
+                            <h4 className="text-xs uppercase font-black tracking-widest text-slate-400">No matching tickets found</h4>
+                            <p className="text-[10px] text-slate-500 uppercase font-bold mt-1 max-w-sm">No ticket records align with your search query in this data cohort.</p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-slate-850 bg-slate-950/50 text-[9px] text-slate-400 font-black uppercase tracking-wider select-none">
+                                <th className="px-4 py-3 text-center">Ticket ID</th>
+                                <th className="px-4 py-3">Roster Info / Details</th>
+                                <th className="px-4 py-3 text-center">Assignee</th>
+                                <th className="px-4 py-3 text-center">Priority / Tier</th>
+                                <th className="px-4 py-3 text-center">Status</th>
+                                <th className="px-4 py-3">SLA Compliance Status</th>
+                                <th className="px-4 py-3 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/65 bg-slate-900/10 text-xs text-slate-300">
+                              {filteredAndSearchList.map(task => {
+                                const tTimes = getTaskSlaTimes(task, new Date().toISOString());
+                                return (
+                                  <tr key={task.id} className="hover:bg-slate-950/30 transition-all font-sans leading-relaxed border-b border-slate-850">
+                                    <td className="px-4 py-3 text-center font-mono font-black text-indigo-400">
+                                      #{task.ticketId || task.id.substring(0, 6)}
+                                    </td>
+                                    <td className="px-4 py-3 font-normal max-w-[340px] text-left">
+                                      <p className="font-extrabold text-white text-[11px] truncate text-left">{task.description}</p>
+                                      <p className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mt-0.5">Logged: {format(new Date(task.generationDate), 'MMM dd, h:mm a')}</p>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 border border-slate-850 rounded-lg">
+                                        <div className="w-4.5 h-4.5 rounded-full bg-slate-800 text-white font-black text-[8px] flex items-center justify-center uppercase">
+                                          {(task.assignedTo || 'Un').substring(0, 2)}
+                                        </div>
+                                        <span className="text-[10px] font-black text-slate-200">{task.assignedTo || 'Unassigned'}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <div className="flex flex-col items-center gap-1">
+                                        <span className={cn(
+                                          "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border leading-none font-sans",
+                                          task.priority === 'P1' ? "bg-red-500/10 border-red-500/20 text-red-400" :
+                                          task.priority === 'P2' ? "bg-orange-500/10 border-orange-500/20 text-orange-400" :
+                                          task.priority === 'P3' ? "bg-blue-500/10 border-blue-500/20 text-blue-400" :
+                                          "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                        )}>
+                                          {task.priority || 'P3'}
+                                        </span>
+                                        <span className="text-[8px] text-slate-500 font-mono font-semibold">TIER-{task.supportLevel || '1'}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className={cn(
+                                        "px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase leading-none border inline-block",
+                                        task.status === 'Resolved' || task.status === 'Closed' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
+                                        task.status === 'In-Progress' ? "bg-blue-500/10 border-blue-500/20 text-blue-400" :
+                                        task.status === 'Hold' ? "bg-violet-500/10 border-violet-500/20 text-violet-400" :
+                                        "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                                      )}>
+                                        {task.status}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-left">
+                                      <div className="space-y-1 text-[9px] font-mono leading-normal">
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-slate-500 uppercase font-black font-sans">Ack Time:</span>
+                                          <span className={cn("font-bold font-mono", tTimes.isResponseBreached ? "text-rose-400 font-extrabold" : "text-emerald-400")}>
+                                            {task.acknowledgementDate ? `Met (${formatDuration(tTimes.responseTimeMin * 60000)})` : `In flight`}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between gap-4">
+                                          <span className="text-slate-500 uppercase font-black font-sans">Fix SLA:</span>
+                                          <span className={cn("font-bold font-mono", tTimes.isResolutionBreached ? "text-rose-400 bg-rose-500/5 px-1 rounded font-black uppercase" : "text-emerald-400")}>
+                                            {tTimes.isResolutionBreached ? `BREACHED` : `MET`} ({parseFloat((tTimes.resolutionTimeMin / 60).toFixed(1))}h / {parseFloat(((tTimes.resolutionLimitMin || 1440) / 60).toFixed(1))}h)
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <div className="flex items-center justify-center gap-1.5">
+                                        <button 
+                                          onClick={() => {
+                                            setDrilldownModalOpen(false);
+                                            setAuditTask(task);
+                                          }}
+                                          className="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 rounded-lg text-indigo-400 hover:text-indigo-300 transition-all font-sans font-bold text-[10px] uppercase cursor-pointer"
+                                          title="Audit exact timelines and historic change trails"
+                                        >
+                                          Audit
+                                        </button>
+                                        <button 
+                                          onClick={() => {
+                                            setDrilldownModalOpen(false);
+                                            startEditing(task);
+                                          }}
+                                          className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg text-blue-400 hover:text-blue-300 transition-all font-sans font-bold text-[10px] uppercase cursor-pointer"
+                                          title="Modify ticket details"
+                                        >
+                                          Edit
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center text-[10px] font-mono text-slate-500">
+                    <span>Database Cohort Segment Filtered On-The-Fly</span>
+                    <button 
+                      onClick={() => setDrilldownModalOpen(false)}
+                      className="px-6 py-2 bg-slate-800 hover:bg-slate-705 text-slate-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Dismiss Analytics Drilldown
                     </button>
                   </div>
                 </motion.div>
