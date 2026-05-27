@@ -830,6 +830,8 @@ export default function App() {
   const [editingTask, setEditingTask] = useState<SupportTask | null>(null);
   const [auditTask, setAuditTask] = useState<SupportTask | null>(null);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+  const [analyticsSubView, setAnalyticsSubView] = useState<'system' | 'productivity'>('system');
+  const [prodSelectedRes, setProdSelectedRes] = useState<string>('All');
 
   // Knowledge Base States
   const [kbSearchQuery, setKbSearchQuery] = useState('');
@@ -1789,6 +1791,60 @@ export default function App() {
       breachRiskBorder = 'border-amber-500/20';
     }
 
+    // Resource Productivity Report Calculations
+    const allResources = Array.from(new Set([
+      ...users.map(u => u.name || u.id),
+      ...distributionTasks.map(t => t.assignedTo).filter(Boolean)
+    ])).sort();
+
+    const resourceProductivity = allResources.map(resName => {
+      const resTasks = distributionTasks.filter(t => t.assignedTo === resName);
+      
+      const p1Tasks = resTasks.filter(t => t.priority === 'P1');
+      const p2Tasks = resTasks.filter(t => t.priority === 'P2');
+      const p3Tasks = resTasks.filter(t => t.priority === 'P3');
+      const p4Tasks = resTasks.filter(t => t.priority === 'P4');
+      
+      const p1Resolved = p1Tasks.filter(t => t.status === 'Resolved' || t.status === 'Closed');
+      const p2Resolved = p2Tasks.filter(t => t.status === 'Resolved' || t.status === 'Closed');
+      const p3Resolved = p3Tasks.filter(t => t.status === 'Resolved' || t.status === 'Closed');
+      const p4Resolved = p4Tasks.filter(t => t.status === 'Resolved' || t.status === 'Closed');
+      
+      const calcHours = (taskList: typeof resTasks) => {
+        const totalMin = taskList.reduce((sum, t) => {
+          if (!t.closureDate) return sum;
+          return sum + differenceInMinutes(parseISO(t.closureDate), parseISO(t.generationDate));
+        }, 0);
+        return parseFloat((totalMin / 60).toFixed(1));
+      };
+
+      const p1Hours = calcHours(p1Resolved);
+      const p2Hours = calcHours(p2Resolved);
+      const p3Hours = calcHours(p3Resolved);
+      const p4Hours = calcHours(p4Resolved);
+      const totalHours = parseFloat((p1Hours + p2Hours + p3Hours + p4Hours).toFixed(1));
+      
+      const resolvedCount = resTasks.filter(t => t.status === 'Resolved' || t.status === 'Closed').length;
+      const inProgressCount = resTasks.filter(t => t.status === 'In-Progress' || t.status === 'Open' || t.status === 'Hold').length;
+
+      return {
+        name: resName,
+        assignedCount: resTasks.length,
+        resolvedCount,
+        inProgressCount,
+        p1Count: p1Tasks.length,
+        p2Count: p2Tasks.length,
+        p3Count: p3Tasks.length,
+        p4Count: p4Tasks.length,
+        p1Hours,
+        p2Hours,
+        p3Hours,
+        p4Hours,
+        totalHours,
+        avgHoursPerResolution: resolvedCount > 0 ? parseFloat((totalHours / resolvedCount).toFixed(1)) : 0
+      };
+    }).filter(r => r.assignedCount > 0);
+
     return { 
       priorityData, 
       levelData, 
@@ -1796,6 +1852,7 @@ export default function App() {
       agingData, 
       consumptionData, 
       trendData,
+      resourceProductivity,
       slaMetrics: {
         responseCompliance: responseSlaCompliance,
         resolutionCompliance: resolutionSlaCompliance,
@@ -1812,7 +1869,7 @@ export default function App() {
         breachRiskBorder
       }
     };
-  }, [projectFilteredTasks, trendPeriod, customStartDate, customEndDate, projectConfigs]);
+  }, [projectFilteredTasks, trendPeriod, customStartDate, customEndDate, projectConfigs, users]);
 
   // --- Knowledge Base Logic ---
   const kbTasks = useMemo(() => {
@@ -3227,6 +3284,14 @@ Guidelines:
     );
   }
 
+  const visibleProductivityData = useMemo(() => {
+    if (isManagerOrAdmin) {
+      return charts.resourceProductivity;
+    }
+    const currentEmpName = currentLoggedInUserObj?.name || currentUser || '';
+    return charts.resourceProductivity.filter(item => item.name.toLowerCase() === currentEmpName.toLowerCase());
+  }, [charts.resourceProductivity, isManagerOrAdmin, currentLoggedInUserObj, currentUser]);
+
   return (
     <div className="flex h-screen overflow-hidden text-slate-200">
       {/* Sidebar Form */}
@@ -3865,9 +3930,46 @@ Guidelines:
                     </motion.div>
                   )}
                 </div>
-                
-                {/* Real-time SLA Acknowledgment, Resolution Gauges, and Breach Risk Panel */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                {/* Analytics Segment Switcher */}
+                <div className="flex items-center justify-between bg-slate-900/20 p-2 rounded-2xl border border-slate-800/80">
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setAnalyticsSubView('system')}
+                      className={cn(
+                        "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300",
+                        analyticsSubView === 'system' 
+                          ? "bg-slate-800 text-white shadow-lg border border-slate-700 font-bold" 
+                          : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/20"
+                      )}
+                    >
+                      <LayoutDashboard className="w-4 h-4 text-sky-400 shrink-0" />
+                      System SLA &amp; Incidents
+                    </button>
+                    <button 
+                      onClick={() => setAnalyticsSubView('productivity')}
+                      className={cn(
+                        "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300",
+                        analyticsSubView === 'productivity' 
+                          ? "bg-slate-800 text-white shadow-lg border border-slate-700 font-bold" 
+                          : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/20"
+                      )}
+                    >
+                      <Users className="w-4 h-4 text-violet-400 shrink-0" />
+                      Resource Productivity Report
+                    </button>
+                  </div>
+                  
+                  <div className="hidden md:flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider select-none px-3">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse-subtle" />
+                    Real-time Calculations
+                  </div>
+                </div>
+
+                {analyticsSubView === 'system' ? (
+                  <>
+                    {/* Real-time SLA Acknowledgment, Resolution Gauges, and Breach Risk Panel */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   
                   {/* Response SLA (MTTA) Gauge Card */}
                   <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl relative overflow-hidden backdrop-blur-sm">
@@ -4180,6 +4282,256 @@ Guidelines:
                   </div>
                 </div>
                 </div>
+                </>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Productivity Header Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      {/* Total Managed Personnel */}
+                      <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex items-center justify-between shadow-xl">
+                        <div className="text-left">
+                          <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Managed Personnel</p>
+                          <h3 className="text-2xl font-black text-white leading-none font-mono mt-1.5">
+                            {visibleProductivityData.length} Resources
+                          </h3>
+                          <p className="text-[9px] text-slate-400 font-bold mt-1.5 uppercase tracking-wide">
+                            With active workload in period
+                          </p>
+                        </div>
+                        <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+                          <Users className="w-5 h-5 animate-pulse-subtle" />
+                        </div>
+                      </div>
+
+                      {/* Total Effort Hours */}
+                      <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex items-center justify-between shadow-xl">
+                        <div className="text-left">
+                          <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Time Invested</p>
+                          <h3 className="text-2xl font-black text-white leading-none font-mono mt-1.5">
+                            {visibleProductivityData.reduce((sum, r) => sum + r.totalHours, 0).toFixed(1)}h
+                          </h3>
+                          <p className="text-[9px] text-slate-300 font-bold mt-1.5 uppercase tracking-wide">
+                            spent resolving tickets
+                          </p>
+                        </div>
+                        <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400">
+                          <Clock className="w-5 h-5" />
+                        </div>
+                      </div>
+
+                      {/* SLA Resolutions Completed */}
+                      <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex items-center justify-between shadow-xl">
+                        <div className="text-left">
+                          <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Total Resolutions</p>
+                          <h3 className="text-2xl font-black text-white leading-none font-mono mt-1.5">
+                            {visibleProductivityData.reduce((sum, r) => sum + r.resolvedCount, 0)} Tickets
+                          </h3>
+                          <p className="text-[9px] text-slate-400 font-bold mt-1.5 uppercase tracking-wide">
+                            Successfully fixed and closed
+                          </p>
+                        </div>
+                        <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                      </div>
+
+                      {/* Speed rating */}
+                      <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl flex items-center justify-between shadow-xl">
+                        <div className="text-left">
+                          <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Global Speed Index</p>
+                          <h3 className="text-2xl font-black text-white leading-none font-mono mt-1.5">
+                            {(() => {
+                              const resolvedSum = visibleProductivityData.reduce((sum, r) => sum + r.resolvedCount, 0);
+                              const hoursSum = visibleProductivityData.reduce((sum, r) => sum + r.totalHours, 0);
+                              return resolvedSum > 0 ? (hoursSum / resolvedSum).toFixed(1) : '0';
+                            })()}h
+                          </h3>
+                          <p className="text-[9px] text-slate-400 font-bold mt-1.5 uppercase tracking-wide">
+                            Average duration per incident
+                          </p>
+                        </div>
+                        <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400">
+                          <Brain className="w-5 h-5" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Priority Hours Stacked comparison chart */}
+                    <div className="chart-container p-6 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div className="text-left">
+                          <h3 className="text-sm font-black text-white uppercase tracking-wider mb-1 leading-none">Resource Effort &amp; Time Spent by Ticket Priority</h3>
+                          <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-0.5">Stacked hours representation comparing relative workload of assigned engineers</p>
+                        </div>
+                        
+                        {/* Select focus resource drop-down */}
+                        {isManagerOrAdmin && (
+                          <div className="flex items-center gap-2 select-none">
+                            <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest whitespace-nowrap">Filter Engineer:</label>
+                            <select 
+                              value={prodSelectedRes}
+                              onChange={(e) => setProdSelectedRes(e.target.value)}
+                              className="bg-slate-950 border border-slate-800 text-xs text-white rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 font-bold transition-all"
+                            >
+                              <option value="All">All Resources</option>
+                              {visibleProductivityData.map(r => (
+                                <option key={r.name} value={r.name}>{r.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="h-[320px] w-full">
+                        {(() => {
+                          const chartData = prodSelectedRes === 'All' 
+                            ? visibleProductivityData 
+                            : visibleProductivityData.filter(r => r.name === prodSelectedRes);
+                          
+                          if (chartData.length === 0) {
+                            return (
+                              <div className="h-full flex flex-col items-center justify-center text-center text-slate-500">
+                                <Users className="w-8 h-8 text-slate-700 mb-2" />
+                                <p className="text-xs font-bold uppercase tracking-widest">No active hours logged in current timeframe</p>
+                              </div>
+                            );
+                          }
+                          return (
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
+                                <XAxis dataKey="name" stroke={chartColors.text} fontSize={10} tickLine={false} axisLine={false} />
+                                <YAxis stroke={chartColors.text} fontSize={10} tickLine={false} axisLine={false} />
+                                <Tooltip 
+                                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                  contentStyle={{ backgroundColor: chartColors.tooltipBg, border: `1px solid ${chartColors.tooltipBorder}`, borderRadius: '12px' }}
+                                  itemStyle={{ color: chartColors.tooltipText }}
+                                />
+                                <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 'bold' }} />
+                                <Bar dataKey="p1Hours" name="P1 (Hours)" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="p2Hours" name="P2 (Hours)" stackId="a" fill="#f97316" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="p3Hours" name="P3 (Hours)" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="p4Hours" name="P4 (Hours)" stackId="a" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Resource Productivity Details Grid */}
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                      <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/40 flex items-center justify-between">
+                        <h3 className="text-xs font-black text-white uppercase tracking-wider">Productivity Allocation Index</h3>
+                        <span className="text-[10px] text-indigo-400 font-extrabold uppercase bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/10">Engineers Workload Metric</span>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left font-sans text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-800 bg-slate-950/40 text-[10px] text-slate-500 font-black uppercase tracking-widest select-none">
+                              <th className="px-6 py-4">Engineer / Resource</th>
+                              <th className="px-6 py-4 text-center">Assigned</th>
+                              <th className="px-6 py-4 text-center">Resolved</th>
+                              <th className="px-6 py-4 text-center">Avg Resolution Speed</th>
+                              <th className="px-6 py-4 text-center text-rose-400">P1 Effort</th>
+                              <th className="px-6 py-4 text-center text-orange-400">P2 Effort</th>
+                              <th className="px-6 py-4 text-center text-blue-400">P3 Effort</th>
+                              <th className="px-6 py-4 text-center text-emerald-400">P4 Effort</th>
+                              <th className="px-6 py-4 text-center">Total Hours</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800 text-xs">
+                            {(() => {
+                              const tableData = prodSelectedRes === 'All' 
+                                ? visibleProductivityData 
+                                : visibleProductivityData.filter(r => r.name === prodSelectedRes);
+
+                              if (tableData.length === 0) {
+                                return (
+                                  <tr>
+                                    <td colSpan={9} className="px-6 py-12 text-center text-slate-500 font-bold uppercase tracking-widest">
+                                      No records match this selection
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
+                              return tableData.map((res) => (
+                                <tr key={res.name} className="hover:bg-slate-900/30 transition-colors">
+                                  <td className="px-6 py-4 text-left font-black text-white flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center font-bold text-[10px] uppercase">
+                                      {res.name.substring(0, 2)}
+                                    </div>
+                                    <div>
+                                      <p className="leading-none">{res.name}</p>
+                                      <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">IT SUPPORT TEAM</p>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-center font-mono font-bold text-slate-300">
+                                    {res.assignedCount}
+                                  </td>
+                                  <td className="px-6 py-4 text-center">
+                                    <div className="flex flex-col items-center">
+                                      <span className="font-mono font-black text-emerald-400">{res.resolvedCount}</span>
+                                      <span className="text-[9px] text-slate-500 font-bold">({Math.round((res.resolvedCount / res.assignedCount) * 100)}%)</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-center font-mono font-bold text-slate-400">
+                                    {res.resolvedCount > 0 ? (
+                                      <span className="text-indigo-400">{res.avgHoursPerResolution}h <span className="text-[9px] text-slate-500 font-bold">/ tkt</span></span>
+                                    ) : (
+                                      <span className="text-slate-600">N/A</span>
+                                    )}
+                                  </td>
+                                  
+                                  {/* P1 effort */}
+                                  <td className="px-6 py-4 text-center">
+                                    <div className="flex flex-col items-center">
+                                      <span className="font-mono text-slate-300">{res.p1Count} tkts</span>
+                                      <span className="text-[10px] text-rose-400 font-black font-mono">{res.p1Hours}h</span>
+                                    </div>
+                                  </td>
+                                  
+                                  {/* P2 effort */}
+                                  <td className="px-6 py-4 text-center">
+                                    <div className="flex flex-col items-center">
+                                      <span className="font-mono text-slate-300">{res.p2Count} tkts</span>
+                                      <span className="text-[10px] text-orange-400 font-black font-mono">{res.p2Hours}h</span>
+                                    </div>
+                                  </td>
+                                  
+                                  {/* P3 effort */}
+                                  <td className="px-6 py-4 text-center">
+                                    <div className="flex flex-col items-center">
+                                      <span className="font-mono text-slate-300">{res.p3Count} tkts</span>
+                                      <span className="text-[10px] text-blue-400 font-black font-mono">{res.p3Hours}h</span>
+                                    </div>
+                                  </td>
+                                  
+                                  {/* P4 effort */}
+                                  <td className="px-6 py-4 text-center">
+                                    <div className="flex flex-col items-center">
+                                      <span className="font-mono text-slate-300">{res.p4Count} tkts</span>
+                                      <span className="text-[10px] text-emerald-400 font-black font-mono">{res.p4Hours}h</span>
+                                    </div>
+                                  </td>
+
+                                  {/* Total effort spent */}
+                                  <td className="px-6 py-4 text-center mr-2">
+                                    <div className="inline-block px-3 py-1 bg-violet-500/10 border border-violet-500/15 rounded-lg text-violet-400 font-black font-mono text-[13px]">
+                                      {res.totalHours}h
+                                    </div>
+                                  </td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             ) : activeTab === 'workbook' ? (
               <motion.div 
