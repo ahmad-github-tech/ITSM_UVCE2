@@ -1380,17 +1380,17 @@ export default function App() {
     }));
   };
 
-  // Reset projectId in formData when projects load
+  // Reset projectId in formData when projects load based on user permissibility
   useEffect(() => {
-    if (PROJECTS_LIST.length > 0 && !formData.projectId) {
-      const firstProj = PROJECTS_LIST[0];
+    if (userMappedProjects.length > 0 && (!formData.projectId || !userMappedProjects.includes(formData.projectId))) {
+      const firstProj = userMappedProjects[0];
       setFormData(prev => ({ 
         ...prev, 
         projectId: firstProj,
         ticketId: getNextTicketId(firstProj, tasks)
       }));
     }
-  }, [PROJECTS_LIST, tasks, formData.projectId]);
+  }, [userMappedProjects, tasks, formData.projectId]);
 
   // --- Filtered Tasks ---
   const projectFilteredTasks = useMemo(() => {
@@ -1763,6 +1763,15 @@ export default function App() {
   // --- Handlers ---
   const handleSaveTask = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.category || !formData.category.trim()) {
+      alert("Error: Please select a Category.");
+      return;
+    }
+    if (!formData.subcategory || !formData.subcategory.trim()) {
+      alert("Error: Please select a Subcategory.");
+      return;
+    }
 
     const actionLabel = editingTask ? 'Update' : 'Commit New';
     const confirmationMessage = editingTask 
@@ -3007,7 +3016,9 @@ export default function App() {
                     });
                   }}
                 >
-                  {projectConfigs.map(p => <option key={p.projectId} value={p.projectId}>{p.projectId}</option>)}
+                  {projectConfigs
+                    .filter(p => isManagerOrAdmin || userMappedProjects.includes(p.projectId))
+                    .map(p => <option key={p.projectId} value={p.projectId}>{p.projectId}</option>)}
                 </select>
               </div>
 
@@ -3052,7 +3063,7 @@ export default function App() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label-sm">Category</label>
+                <label className="label-sm">Category <span className="text-red-500">*</span></label>
                 <select 
                   className="input-field"
                   value={formData.category || ''}
@@ -3067,7 +3078,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="label-sm">Subcategory</label>
+                <label className="label-sm">Subcategory <span className="text-red-500">*</span></label>
                 <select 
                   className="input-field"
                   value={formData.subcategory || ''}
